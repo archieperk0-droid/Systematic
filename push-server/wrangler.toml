@@ -1,0 +1,15 @@
+name = "systematic-push"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[triggers]
+crons = ["*/2 * * * *"]
+
+[[kv_namespaces]]
+binding = "STORE"
+id = "REPLACE_AFTER_STEP_3"
+
+[vars]
+VAPID_SUBJECT = "mailto:archieperkins0@gmail.com"
+VAPID_PUBLIC_KEY = "BE4Izwr8pEgO2Al6mbt0uZnvO2WeUjjf1uOpjXrOgef_NTfaAlIHfFEaOpZtRFUf0CrL1owG5KiMvVk_y-O_dFc"
+# VAPID_PRIVATE_KEY is set as a secret — see setup instructions

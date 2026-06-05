@@ -117,6 +117,13 @@ body{
   display:flex;align-items:center;justify-content:center;transition:color .12s;
 }
 .today-action-btn:hover{color:var(--soft)}
+.day-nav-btn{
+  width:28px;height:28px;background:var(--s2);border:1px solid var(--bd2);
+  border-radius:7px;cursor:pointer;color:var(--soft);font-size:15px;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  transition:color .12s;
+}
+.day-nav-btn:hover{color:var(--tx)}
 
 .event-card{
   background:var(--s2);border:1px solid var(--bd);
@@ -660,7 +667,11 @@ table.tt th, table.tt td{
 <!-- TODAY TAB -->
 <section class="tab on" id="tab-today">
   <div class="today-head">
-    <div class="today-date" id="today-date"></div>
+    <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+      <button class="day-nav-btn" onclick="shiftViewDay(-1)">‹</button>
+      <div class="today-date" id="today-date" style="flex:1;min-width:0"></div>
+      <button class="day-nav-btn" onclick="shiftViewDay(1)">›</button>
+    </div>
     <div class="today-actions">
       <div class="today-nowtime" id="today-nowtime"></div>
       <button class="notify-all-btn" id="notify-all-btn" onclick="toggleNotifyAll()" title="Toggle notifications for all events">
@@ -1000,6 +1011,15 @@ function tickClock(){
     `${pad(n.getHours())}:${pad(n.getMinutes())}`;
 }
 
+// Today tab day offset (0 = today, 1 = tomorrow, -1 = yesterday)
+let viewDayOffset = 0;
+
+function shiftViewDay(n) {
+  viewDayOffset = Math.max(-7, Math.min(7, viewDayOffset + n));
+  renderToday();
+  updateNotifyAllBtn();
+}
+
 // which event cards are currently expanded (in-memory only)
 const _expanded = new Set();
 
@@ -1016,7 +1036,7 @@ function switchTab(name){
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
   document.getElementById('tab-'+name).classList.add('on');
   document.getElementById('nav-'+name).classList.add('on');
-  if(name==='today')    { renderToday(); updateNotifyAllBtn(); }
+  if(name==='today')    { viewDayOffset=0; renderToday(); updateNotifyAllBtn(); }
   if(name==='week')     renderWeek();
   if(name==='calendar') renderCalendar();
 }
@@ -1025,19 +1045,29 @@ function switchTab(name){
 // TODAY TAB
 // ═══════════════════════════════════════
 function renderToday(){
-  const now  = new Date();
-  const dow  = getDow(now);
-  const tStr = today();
-  const nowM = timeMins(`${pad(now.getHours())}:${pad(now.getMinutes())}`);
+  const real = new Date();
+  const view = new Date(real);
+  view.setDate(real.getDate() + viewDayOffset);
 
-  // Date header
-  const d = now;
+  const dow  = getDow(view);
+  const tStr = isoDate(view);
+  // nowM only meaningful for actual today
+  const nowM = viewDayOffset === 0
+    ? timeMins(`${pad(real.getHours())}:${pad(real.getMinutes())}`)
+    : -1;
+
+  // Date header — show label for yesterday/tomorrow
+  const label = viewDayOffset === 0 ? ''
+    : viewDayOffset === 1  ? ' <span style="font-size:11px;color:var(--accent);font-family:\'JetBrains Mono\',monospace;letter-spacing:.04em">TOMORROW</span>'
+    : viewDayOffset === -1 ? ' <span style="font-size:11px;color:var(--muted);font-family:\'JetBrains Mono\',monospace;letter-spacing:.04em">YESTERDAY</span>'
+    : ` <span style="font-size:11px;color:var(--muted);font-family:\'JetBrains Mono\',monospace">${viewDayOffset > 0 ? '+' : ''}${viewDayOffset}d</span>`;
+
   document.getElementById('today-date').innerHTML =
-    `${FULLDAY[d.getDay()]} <span>${d.getDate()} ${MONTHS[d.getMonth()]}</span>`;
+    `${FULLDAY[view.getDay()]}${label} <span>${view.getDate()} ${MONTHS[view.getMonth()]}</span>`;
   document.getElementById('today-nowtime').textContent =
-    `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    viewDayOffset === 0 ? `${pad(real.getHours())}:${pad(real.getMinutes())}` : '';
 
-  // Gather events: template recurring today + one-offs for today, minus skipped
+  // Gather events for the viewed day
   const recurring = S.template.filter(e => e.days.includes(dow) && !isSkipped(e.id, tStr));
   const oneoffs   = S.oneoffs.filter(e => e.date === tStr && !isSkipped(e.id, tStr));
   const all = [...recurring, ...oneoffs].sort((a,b)=>timeMins(a.startTime)-timeMins(b.startTime));
@@ -2019,7 +2049,130 @@ setInterval(()=>{
 }, 60000);
 
 renderToday();
-requestNotifPermission().then(scheduleNotifications);
+requestNotifPermission().then(() => {
+  scheduleNotifications();   // in-app fallback (when app is open)
+  syncPushSchedule();        // register with server (works when app is closed)
+});
+
+// ═══════════════════════════════════════
+// WEB PUSH (server-side notifications)
+// ═══════════════════════════════════════
+
+// Set this to your Cloudflare Worker URL after deploying push-server/
+// Leave blank until you've deployed — the app will work without it (in-app only)
+const WORKER_URL = '';
+
+const VAPID_PUBLIC_KEY = 'BE4Izwr8pEgO2Al6mbt0uZnvO2WeUjjf1uOpjXrOgef_NTfaAlIHfFEaOpZtRFUf0CrL1owG5KiMvVk_y-O_dFc';
+
+function urlB64ToUint8(b64) {
+  const pad = '='.repeat((4 - b64.length % 4) % 4);
+  const raw = atob((b64 + pad).replace(/-/g,'+').replace(/_/g,'/'));
+  return Uint8Array.from(raw, c => c.charCodeAt(0));
+}
+
+function buildNotificationSchedule() {
+  const notifications = [];
+  const now = new Date();
+
+  for (let d = 0; d < 7; d++) {
+    const date = new Date(now);
+    date.setDate(now.getDate() + d);
+    date.setHours(0, 0, 0, 0);
+    const dateStr = isoDate(date);
+    const dow     = getDow(date);
+
+    const evs = [
+      ...S.template.filter(e => e.days.includes(dow) && !isSkipped(e.id, dateStr)),
+      ...S.oneoffs.filter(e => e.date === dateStr   && !isSkipped(e.id, dateStr)),
+    ];
+
+    evs.forEach(ev => {
+      if (!ev.bell?.at || !ev.startTime) return;
+      const [h, m]  = ev.startTime.split(':').map(Number);
+      const startMs = new Date(date).setHours(h, m, 0, 0);
+
+      // Reminder before start
+      if (ev.bell.before > 0) {
+        const remMs = startMs - ev.bell.before * 60000;
+        if (remMs > now.getTime()) {
+          notifications.push({
+            id:       `${ev.id}_${dateStr}_rem`,
+            title:    `${ev.title} in ${ev.bell.before} min`,
+            body:     ev.location ? `📍 ${ev.location}` : `Starts ${ev.startTime}`,
+            notifyAt: remMs,
+            sent:     false,
+          });
+        }
+      }
+
+      // At start
+      if (startMs > now.getTime()) {
+        const lines = [];
+        if (ev.endTime) lines.push(`${ev.startTime} – ${ev.endTime}`);
+        if (ev.location) lines.push(`📍 ${ev.location}`);
+        if (ev.checklist?.length) ev.checklist.slice(0,3).forEach(i => lines.push(`○ ${i.text}`));
+        notifications.push({
+          id:       `${ev.id}_${dateStr}_start`,
+          title:    `▶ ${ev.title}`,
+          body:     lines.join('\n'),
+          notifyAt: startMs,
+          sent:     false,
+        });
+      }
+    });
+  }
+  return notifications;
+}
+
+async function syncPushSchedule() {
+  if (!WORKER_URL) return;                                         // not configured yet
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (Notification.permission !== 'granted') return;
+
+  try {
+    const reg = await navigator.serviceWorker.ready;
+
+    // Subscribe (or retrieve existing subscription)
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlB64ToUint8(VAPID_PUBLIC_KEY),
+      });
+    }
+
+    // Stable ID for this device's subscription
+    let subId = localStorage.getItem('sys_push_id');
+    if (!subId) { subId = uid(); localStorage.setItem('sys_push_id', subId); }
+
+    const notifications = buildNotificationSchedule();
+
+    await fetch(`${WORKER_URL}/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subId, subscription: sub.toJSON(), notifications }),
+    });
+  } catch (e) {
+    console.warn('Push sync failed:', e.message);
+  }
+}
+
+// Re-sync whenever events change
+const _origSave = save;
+// Debounce sync so rapid edits don't hammer the server
+let _syncTimer = null;
+function save() {
+  _origSave();
+  if (WORKER_URL) {
+    clearTimeout(_syncTimer);
+    _syncTimer = setTimeout(syncPushSchedule, 2000);
+  }
+}
+
+// Also re-sync when app comes back to foreground
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && WORKER_URL) syncPushSchedule();
+});
 </script>
 </body>
 </html>

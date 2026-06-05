@@ -1,4 +1,4 @@
-const CACHE = 'seize-v2';
+const CACHE = 'systematic-v1';
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./'])));
@@ -20,13 +20,28 @@ self.addEventListener('fetch', e => {
   );
 });
 
+// Receive push from server → show notification on lock screen
+self.addEventListener('push', e => {
+  const data = e.data?.json() || {};
+  e.waitUntil(
+    self.registration.showNotification(data.title || 'Systematic', {
+      body:     data.body  || '',
+      icon:     './icon-192.png',
+      badge:    './icon-192.png',
+      tag:      data.tag   || 'systematic',
+      renotify: true,
+      data:     { url: './' },
+    })
+  );
+});
+
+// Tap notification → open app
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil(
-    self.clients.matchAll({type:'window', includeUncontrolled:true}).then(list => {
-      const focused = list.find(c => c.focused);
-      if(focused) return focused.focus();
-      if(list.length) return list[0].focus();
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      const open = list.find(c => c.url.includes('Systematic') || c.url.includes('systematic'));
+      if (open) return open.focus();
       return self.clients.openWindow('./');
     })
   );
