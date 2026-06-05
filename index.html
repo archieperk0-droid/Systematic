@@ -89,16 +89,34 @@ body{
 
 .today-head{
   margin-bottom:20px;
-  display:flex;align-items:flex-end;justify-content:space-between;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
 }
 .today-date{
-  font-size:22px;font-weight:700;letter-spacing:-0.02em;line-height:1.1;
+  font-size:22px;font-weight:700;letter-spacing:-0.02em;line-height:1.1;flex:1;
 }
 .today-date span{color:var(--soft);font-weight:400;font-size:14px}
+.today-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
 .today-nowtime{
   font-family:'JetBrains Mono',monospace;font-size:13px;
   color:var(--accent);font-weight:500;
 }
+.notify-all-btn{
+  display:flex;align-items:center;gap:5px;
+  background:var(--s2);border:1px solid var(--bd2);border-radius:8px;
+  padding:6px 10px;cursor:pointer;color:var(--soft);
+  font-size:11px;font-family:'JetBrains Mono',monospace;
+  letter-spacing:.04em;text-transform:uppercase;transition:all .15s;
+}
+.notify-all-btn.all-on{
+  background:rgba(245,216,78,0.12);border-color:rgba(245,216,78,0.35);
+  color:var(--accent);
+}
+.today-action-btn{
+  width:32px;height:32px;background:var(--s2);border:1px solid var(--bd2);
+  border-radius:8px;cursor:pointer;color:var(--muted);
+  display:flex;align-items:center;justify-content:center;transition:color .12s;
+}
+.today-action-btn:hover{color:var(--soft)}
 
 .event-card{
   background:var(--s2);border:1px solid var(--bd);
@@ -643,7 +661,28 @@ table.tt th, table.tt td{
 <section class="tab on" id="tab-today">
   <div class="today-head">
     <div class="today-date" id="today-date"></div>
-    <div class="today-nowtime" id="today-nowtime"></div>
+    <div class="today-actions">
+      <div class="today-nowtime" id="today-nowtime"></div>
+      <button class="notify-all-btn" id="notify-all-btn" onclick="toggleNotifyAll()" title="Toggle notifications for all events">
+        <span id="notify-all-icon"></span>
+        <span id="notify-all-label"></span>
+      </button>
+      <button class="today-action-btn" onclick="exportData()" title="Export backup">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7,10 12,15 17,10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+      </button>
+      <label class="today-action-btn" title="Import backup">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17,8 12,3 7,8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <input type="file" accept=".json" style="display:none" onchange="importData(event)">
+      </label>
+    </div>
   </div>
   <div id="today-cards"></div>
 </section>
@@ -857,10 +896,34 @@ table.tt th, table.tt td{
 // ═══════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════
-const TT_START = 5;   // 05:00
-const TT_END   = 23;  // 23:00
-const SLOT_H   = 24;  // px per 30-min slot
+const TT_START = 5;
+const TT_END   = 23;
+const SLOT_H   = 24;
 const TOTAL_SLOTS = (TT_END - TT_START) * 2;
+
+// Default notification timing per category
+const CAT_BELL = {
+  routine:  { at:true,  before:10  },  // 10 min — morning/evening system
+  work:     { at:true,  before:60  },  // 1 hr — Signify
+  gym:      { at:true,  before:15  },  // 15 min
+  muaythai: { at:true,  before:15  },  // 15 min
+  football: { at:true,  before:30  },  // 30 min
+  social:   { at:true,  before:30  },  // 30 min
+  travel:   { at:true,  before:20  },  // 20 min
+  personal: { at:true,  before:10  },  // 10 min
+  sleep:    { at:false, before:0   },  // off
+};
+
+// Bell SVG — filled when on, outline when off
+function bellSvg(on, size=18){
+  if(on) return `<svg width='${size}' height='${size}' viewBox='0 0 24 24' fill='currentColor'>
+    <path d='M12 22c1.1 0 2-.9 2-2H10c0 1.1.9 2 2 2zm6-6V11c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z'/>
+  </svg>`;
+  return `<svg width='${size}' height='${size}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>
+    <path d='M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9'/>
+    <path d='M13.73 21a2 2 0 0 1-3.46 0'/>
+  </svg>`;
+}
 
 const MONTHS = ['January','February','March','April','May','June',
                 'July','August','September','October','November','December'];
@@ -953,7 +1016,7 @@ function switchTab(name){
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
   document.getElementById('tab-'+name).classList.add('on');
   document.getElementById('nav-'+name).classList.add('on');
-  if(name==='today')    renderToday();
+  if(name==='today')    { renderToday(); updateNotifyAllBtn(); }
   if(name==='week')     renderWeek();
   if(name==='calendar') renderCalendar();
 }
@@ -1052,10 +1115,7 @@ function renderToday(){
           ${chevron}
           <button class="ec-bell${bellOn?' on':''}" title="Notification"
                   onclick="event.stopPropagation();toggleBellFromToday('${ev.id}')">
-            <svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>
-              <path d='M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9'/>
-              <path d='M13.73 21a2 2 0 0 1-3.46 0'/>
-            </svg>
+            ${bellSvg(bellOn, 18)}
           </button>
           <button class="ec-minus" title="${isOneOff?'Delete event':'Hide today'}"
                   onclick="event.stopPropagation();${isOneOff?`confirmDeleteOneOff('${ev.id}')`:`skipEvent('${ev.id}','${tStr}')`}">
@@ -1159,7 +1219,7 @@ function renderWeek(){
         td.rowSpan = ev._rs;
         td.className = `tt-ev bg-${ev.cat}`;
         const locMark  = ev.location ? `<div class="tt-ev-sub" style="display:flex;align-items:center;gap:2px"><svg width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z'/><circle cx='12' cy='10' r='3'/></svg>${ev.location}</div>` : '';
-        const bellMark = ev.bell?.at ? `<div class="tt-ev-bell"><svg width='9' height='9' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9'/><path d='M13.73 21a2 2 0 0 1-3.46 0'/></svg></div>` : '';
+        const bellMark = ev.bell?.at ? `<div class="tt-ev-bell">${bellSvg(true, 9)}</div>` : '';
         const clCount  = ev.checklist?.length ? `<div class="tt-ev-sub">${ev.checklist.length} items</div>` : '';
         td.innerHTML = `<div class="tt-ev-inner">
           <div class="tt-ev-title">${ev.title}</div>
@@ -1371,10 +1431,7 @@ function openAddModal(dayIdx, time, oneoffMode=false, dateStr=null){
   document.getElementById('ev-end').value='';
   document.getElementById('ev-cat').value='routine';
   document.getElementById('ev-location').value='';
-  document.getElementById('bell-at').checked=false;
-  document.getElementById('bell-before').value='0';
-  document.getElementById('reminder-row').style.opacity='.4';
-  document.getElementById('reminder-row').style.pointerEvents='none';
+  applyCatBellDefaults('routine');  // pre-fill bell from category
   _cl=[];
   renderCLEditor();
 
@@ -1543,6 +1600,86 @@ document.getElementById('bell-at').addEventListener('change',function(){
   document.getElementById('reminder-row').style.opacity=this.checked?'1':'.4';
   document.getElementById('reminder-row').style.pointerEvents=this.checked?'auto':'none';
 });
+
+// Category change → apply bell defaults
+document.getElementById('ev-cat').addEventListener('change',function(){
+  applyCatBellDefaults(this.value);
+});
+
+function applyCatBellDefaults(cat){
+  const def = CAT_BELL[cat] || { at:false, before:0 };
+  document.getElementById('bell-at').checked = def.at;
+  document.getElementById('bell-before').value = def.before;
+  document.getElementById('reminder-row').style.opacity = def.at ? '1' : '.4';
+  document.getElementById('reminder-row').style.pointerEvents = def.at ? 'auto' : 'none';
+}
+
+// ═══════════════════════════════════════
+// NOTIFY ALL
+// ═══════════════════════════════════════
+function allNotifsOn(){
+  return S.template.length > 0 && S.template.every(e => e.bell?.at);
+}
+
+function updateNotifyAllBtn(){
+  const on = allNotifsOn();
+  const btn = document.getElementById('notify-all-btn');
+  if(!btn) return;
+  btn.classList.toggle('all-on', on);
+  document.getElementById('notify-all-icon').innerHTML = bellSvg(on, 14);
+  document.getElementById('notify-all-label').textContent = on ? 'All on' : 'Notify all';
+}
+
+function toggleNotifyAll(){
+  const turnOn = !allNotifsOn();
+  S.template.forEach(ev => {
+    if(!ev.bell) ev.bell = { at:false, before:0 };
+    ev.bell.at = turnOn;
+    if(turnOn && ev.bell.before === 0){
+      ev.bell.before = (CAT_BELL[ev.cat] || {before:0}).before;
+    }
+  });
+  save();
+  scheduleNotifications();
+  updateNotifyAllBtn();
+  renderToday();
+}
+
+// ═══════════════════════════════════════
+// EXPORT / IMPORT
+// ═══════════════════════════════════════
+function exportData(){
+  const json = JSON.stringify(S, null, 2);
+  const blob = new Blob([json], {type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `systematic-backup-${today()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if(!data.template) throw new Error('Invalid backup');
+      if(!confirm('This will replace all your current data. Continue?')) return;
+      S = data;
+      save();
+      renderToday();
+      updateNotifyAllBtn();
+      alert('Imported successfully.');
+    } catch(err) {
+      alert('Could not read backup file.');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
 
 // Tap outside sheet to close
 document.getElementById('modal-ev').addEventListener('click',e=>{
@@ -1872,6 +2009,7 @@ if('serviceWorker' in navigator){
 
 seedData();
 updateSavedListSelect();
+updateNotifyAllBtn();
 
 tickClock();
 setInterval(tickClock, 30000);
