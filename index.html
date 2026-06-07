@@ -2014,34 +2014,60 @@ function importTimetableCSV(e){
     try {
       const rawLines = ev.target.result.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
 
-      // 1. Find header row containing day names
+      // 1. Find header row containing day names → dayColMap (di 0–6 → col index)
       const DAY_WORDS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
       let headerIdx = -1;
-      const dayColMap = {}; // di 0–6 → column index
+      const dayColMap = {};
       for(let i=0; i<rawLines.length; i++){
-        const cols = _parseCSVRow(rawLines[i]).map(c=>c.toLowerCase());
+        const cols = _parseCSVRow(rawLines[i]).map(c=>c.toLowerCase().trim());
         let hits = 0;
         DAY_WORDS.forEach((d,di)=>{ const ci=cols.indexOf(d); if(ci>=0){dayColMap[di]=ci; hits++;} });
         if(hits>=5){ headerIdx=i; break; }
       }
       if(headerIdx<0) throw new Error('No day-name header row found (needs Monday … Sunday)');
 
-      // 2. Find time column (first column containing HH:MM values after header)
+      // 2. Find the date row (DD/MM/YY or DD/MM/YYYY) in the rows just after header
+      const colDates = {}; // col index → 'YYYY-MM-DD'
+      for(let i=headerIdx+1; i<Math.min(headerIdx+6, rawLines.length); i++){
+        const cols = _parseCSVRow(rawLines[i]);
+        let found = false;
+        for(let ci=0; ci<cols.length; ci++){
+          const m = cols[ci].trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+          if(m){
+            const [,d,mo,yr] = m;
+            const year = yr.length===2 ? 2000+parseInt(yr) : parseInt(yr);
+            colDates[ci] = `${year}-${pad(parseInt(mo))}-${pad(parseInt(d))}`;
+            found = true;
+          }
+        }
+        if(found) break;
+      }
+
+      // Map each day-of-week index → its specific date string
+      const dayDates = {}; // di 0–6 → 'YYYY-MM-DD'
+      for(let di=0; di<7; di++){
+        const ci = dayColMap[di];
+        if(ci !== undefined && colDates[ci]) dayDates[di] = colDates[ci];
+      }
+      if(Object.keys(dayDates).length < 5)
+        throw new Error('No date row found in CSV (expected DD/MM/YY below the day names)');
+
+      // 3. Find time column (HH:MM values)
       let timeColIdx = -1;
       for(let i=headerIdx+1; i<rawLines.length; i++){
         const cols = _parseCSVRow(rawLines[i]);
         for(let ci=0; ci<cols.length; ci++){
-          if(/^\d{1,2}:\d{2}$/.test(cols[ci])){ timeColIdx=ci; break; }
+          if(/^\d{1,2}:\d{2}$/.test(cols[ci].trim())){ timeColIdx=ci; break; }
         }
         if(timeColIdx>=0) break;
       }
       if(timeColIdx<0) throw new Error('No time column found (expected HH:MM values)');
 
-      // 3. Collect event slots per day
+      // 4. Collect event slots per day
       const slotsByDay = Array.from({length:7}, ()=>[]); // [{name, time}]
       for(let i=headerIdx+1; i<rawLines.length; i++){
         const cols = _parseCSVRow(rawLines[i]);
-        const t = cols[timeColIdx] || '';
+        const t = (cols[timeColIdx]||'').trim();
         if(!/^\d{1,2}:\d{2}$/.test(t)) continue;
         for(let di=0; di<7; di++){
           const ci = dayColMap[di];
@@ -2052,39 +2078,49 @@ function importTimetableCSV(e){
         }
       }
 
-      // 4. Derive endTime = next event's startTime (or +60 min for last)
-      //    Group identical (name, startTime, endTime) across days
-      const evMap = {};
+      // 5. Build one-off events tied to specific dates (not recurring template)
+      const events = [];
       for(let di=0; di<7; di++){
-        const slots = slotsByDay[di];
+        const slots   = slotsByDay[di];
+        const dateStr = dayDates[di];
+        if(!dateStr) continue;
         for(let si=0; si<slots.length; si++){
           const { name, time:startTime } = slots[si];
           const endTime = si+1<slots.length ? slots[si+1].time : addMins(startTime,60);
-          const key = `${name.toLowerCase()}|${startTime}|${endTime}`;
-          if(!evMap[key]) evMap[key]={name,startTime,endTime,days:[]};
-          if(!evMap[key].days.includes(di)) evMap[key].days.push(di);
+          const rule    = S.rules.find(r=>r.name.toLowerCase()===name.toLowerCase());
+          const cat     = rule?.cat    || inferCat(name);
+          const listId  = rule?.listId || null;
+          const srcList = listId ? S.lists.find(l=>l.id===listId) : null;
+          const bell    = { ...(CAT_BELL[cat]||{at:false,before:0}) };
+          events.push({
+            id:uid(), title:name, cat, date:dateStr,
+            startTime, endTime, bell,
+            checklist: srcList ? srcList.items.map(i=>({...i,id:uid()})) : [],
+            listId: listId||null,
+          });
         }
       }
 
-      // 5. Apply auto-rules → cat + list; build template events
-      const events = Object.values(evMap).map(ev=>{
-        const rule   = S.rules.find(r=>r.name.toLowerCase()===ev.name.toLowerCase());
-        const cat    = rule?.cat    || inferCat(ev.name);
-        const listId = rule?.listId || null;
-        const srcList = listId ? S.lists.find(l=>l.id===listId) : null;
-        const bell   = { ...(CAT_BELL[cat]||{at:false,before:0}) };
-        return {
-          id:uid(), title:ev.name, cat,
-          days:[...ev.days].sort((a,b)=>a-b),
-          startTime:ev.startTime, endTime:ev.endTime, bell,
-          checklist: srcList ? srcList.items.map(i=>({...i,id:uid()})) : [],
-          listId: listId||null,
-        };
-      });
-
       if(!events.length) throw new Error('No events found in the CSV');
-      showConfirm(`Import ${events.length} events? This will replace your current weekly template.`, ()=>{
-        S.template = events;
+
+      const allDates   = Object.values(dayDates).sort();
+      const [d0, d1]   = [allDates[0], allDates[allDates.length-1]];
+      const fmtDate    = s => { const [y,mo,d]=s.split('-'); return `${parseInt(d)} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(mo)-1]}`; };
+      const weekLabel  = `${fmtDate(d0)} – ${fmtDate(d1)}`;
+
+      showConfirm(`Import ${events.length} events for ${weekLabel}?<br><span style="font-size:12px;color:var(--muted)">Replaces any existing events for those dates.</span>`, ()=>{
+        // Remove existing one-offs for the same dates, then add new ones
+        const dateSet = new Set(allDates);
+        S.oneoffs = S.oneoffs.filter(e=>!dateSet.has(e.date));
+        S.oneoffs.push(...events);
+
+        // Navigate the week view to the imported week
+        const importMon   = new Date(d0 + 'T00:00:00');
+        const todayD      = new Date(); todayD.setHours(0,0,0,0);
+        const thisWeekMon = new Date(todayD);
+        thisWeekMon.setDate(todayD.getDate() - getDow(todayD));
+        weekOffset = Math.round((importMon - thisWeekMon) / (7*24*3600*1000));
+
         save(); renderWeek(); scheduleNotifications(); syncPushSchedule();
       }, false);
     } catch(err){
