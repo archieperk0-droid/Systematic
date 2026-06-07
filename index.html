@@ -119,11 +119,27 @@ body{
 .today-action-btn:hover{color:var(--soft)}
 .day-nav-btn{
   width:28px;height:28px;background:var(--s2);border:1px solid var(--bd2);
-  border-radius:7px;cursor:pointer;color:var(--soft);font-size:15px;
+  border-radius:7px;cursor:pointer;color:var(--soft);
   display:flex;align-items:center;justify-content:center;flex-shrink:0;
   transition:color .12s;
 }
 .day-nav-btn:hover{color:var(--tx)}
+.more-menu-wrap{position:relative}
+.more-menu{
+  position:absolute;top:calc(100% + 6px);right:0;
+  background:var(--s1);border:1px solid var(--bd2);border-radius:10px;
+  padding:4px;min-width:150px;z-index:400;
+  display:none;flex-direction:column;gap:2px;
+}
+.more-menu.open{display:flex}
+.more-menu-item{
+  display:flex;align-items:center;gap:9px;
+  padding:8px 10px;border-radius:7px;cursor:pointer;
+  background:none;border:none;color:var(--soft);
+  font-size:13px;font-family:'Inter',sans-serif;width:100%;text-align:left;
+  transition:background .12s,color .12s;
+}
+.more-menu-item:hover{background:var(--s2);color:var(--tx)}
 
 .event-card{
   background:var(--s2);border:1px solid var(--bd);
@@ -668,9 +684,13 @@ table.tt th, table.tt td{
 <section class="tab on" id="tab-today">
   <div class="today-head">
     <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
-      <button class="day-nav-btn" onclick="shiftViewDay(-1)">‹</button>
+      <button class="day-nav-btn" onclick="shiftViewDay(-1)" title="Previous day">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15,18 9,12 15,6"/></svg>
+      </button>
       <div class="today-date" id="today-date" style="flex:1;min-width:0"></div>
-      <button class="day-nav-btn" onclick="shiftViewDay(1)">›</button>
+      <button class="day-nav-btn" onclick="shiftViewDay(1)" title="Next day">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9,18 15,12 9,6"/></svg>
+      </button>
     </div>
     <div class="today-actions">
       <div class="today-nowtime" id="today-nowtime"></div>
@@ -678,21 +698,24 @@ table.tt th, table.tt td{
         <span id="notify-all-icon"></span>
         <span id="notify-all-label"></span>
       </button>
-      <button class="today-action-btn" onclick="exportData()" title="Export backup">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-          <polyline points="7,10 12,15 17,10"/>
-          <line x1="12" y1="15" x2="12" y2="3"/>
-        </svg>
-      </button>
-      <label class="today-action-btn" title="Import backup">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-          <polyline points="17,8 12,3 7,8"/>
-          <line x1="12" y1="3" x2="12" y2="15"/>
-        </svg>
-        <input type="file" accept=".json" style="display:none" onchange="importData(event)">
-      </label>
+      <div class="more-menu-wrap" id="more-menu-wrap">
+        <button class="today-action-btn" onclick="toggleMoreMenu()" title="More options">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="19" r="1" fill="currentColor"/>
+          </svg>
+        </button>
+        <div class="more-menu" id="more-menu">
+          <button class="more-menu-item" onclick="exportData();closeMoreMenu()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export backup
+          </button>
+          <label class="more-menu-item" onclick="closeMoreMenu()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Import backup
+            <input type="file" accept=".json" style="display:none" onchange="importData(event)">
+          </label>
+        </div>
+      </div>
     </div>
   </div>
   <div id="today-cards"></div>
@@ -1678,6 +1701,18 @@ function toggleNotifyAll(){
 // ═══════════════════════════════════════
 // EXPORT / IMPORT
 // ═══════════════════════════════════════
+function toggleMoreMenu(){
+  const m = document.getElementById('more-menu');
+  m.classList.toggle('open');
+  if (m.classList.contains('open')) {
+    setTimeout(() => document.addEventListener('click', _closeMoreOnOutside, {once:true}), 0);
+  }
+}
+function closeMoreMenu(){ document.getElementById('more-menu').classList.remove('open'); }
+function _closeMoreOnOutside(e){
+  if (!document.getElementById('more-menu-wrap').contains(e.target)) closeMoreMenu();
+}
+
 function exportData(){
   const json = JSON.stringify(S, null, 2);
   const blob = new Blob([json], {type:'application/json'});
