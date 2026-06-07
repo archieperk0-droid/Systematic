@@ -951,7 +951,7 @@ let S = (() => {
   return { v:2, template:[], oneoffs:[], checks:{}, skips:{}, lists:[] };
 })();
 if(!S.skips) S.skips = {};
-const save = () => localStorage.setItem(KEY, JSON.stringify(S));
+let save = () => localStorage.setItem(KEY, JSON.stringify(S));
 
 // ═══════════════════════════════════════
 // UTILITIES
@@ -2161,13 +2161,13 @@ async function syncPushSchedule() {
 const _origSave = save;
 // Debounce sync so rapid edits don't hammer the server
 let _syncTimer = null;
-function save() {
+save = () => {
   _origSave();
   if (WORKER_URL) {
     clearTimeout(_syncTimer);
     _syncTimer = setTimeout(syncPushSchedule, 2000);
   }
-}
+};
 
 // Also re-sync when app comes back to foreground
 document.addEventListener('visibilitychange', () => {
