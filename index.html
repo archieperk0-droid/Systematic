@@ -225,6 +225,22 @@ body{
 }
 .check-text{font-size:13px;flex:1}
 
+.ec-details{
+  border-top:1px solid var(--bd);
+  padding:10px 14px 12px;display:flex;flex-direction:column;gap:8px;
+}
+.ec-detail-loc{
+  display:flex;align-items:center;gap:6px;
+  font-size:12px;color:var(--soft);
+}
+.ec-assign-btn{
+  display:flex;align-items:center;gap:7px;
+  background:var(--s3);border:1px dashed var(--bd2);border-radius:8px;
+  padding:8px 12px;color:var(--muted);font-size:12px;cursor:pointer;
+  transition:all .12s;width:100%;font-family:inherit;
+}
+.ec-assign-btn:hover{color:var(--tx);border-color:var(--soft)}
+
 .today-empty{
   text-align:center;padding:60px 20px;
   color:var(--muted);font-size:14px;
@@ -693,7 +709,6 @@ table.tt th, table.tt td{
       </button>
     </div>
     <div class="today-actions">
-      <div class="today-nowtime" id="today-nowtime"></div>
       <button class="notify-all-btn" id="notify-all-btn" onclick="toggleNotifyAll()" title="Toggle notifications for all events">
         <span id="notify-all-icon"></span>
         <span id="notify-all-label"></span>
@@ -726,6 +741,11 @@ table.tt th, table.tt td{
   <div class="week-bar">
     <button class="wbtn" onclick="switchTab('today')">Today</button>
     <div class="week-bar-title">Weekly Template</div>
+    <button class="wbtn" style="color:var(--red);border-color:var(--red)" onclick="clearTemplate()" title="Clear weekly template">Clear</button>
+    <label class="wbtn" title="Import CSV timetable" style="cursor:pointer">
+      ↑ CSV
+      <input type="file" accept=".csv,.txt" style="display:none" onchange="importTimetableCSV(event)">
+    </label>
     <button class="wbtn accent" onclick="openAddModal(null,null)">+ Add</button>
   </div>
   <div class="tt-scroll" id="tt-scroll">
@@ -1087,8 +1107,6 @@ function renderToday(){
 
   document.getElementById('today-date').innerHTML =
     `${FULLDAY[view.getDay()]}${label} <span>${view.getDate()} ${MONTHS[view.getMonth()]}</span>`;
-  document.getElementById('today-nowtime').textContent =
-    viewDayOffset === 0 ? `${pad(real.getHours())}:${pad(real.getMinutes())}` : '';
 
   // Gather events for the viewed day
   const recurring = S.template.filter(e => e.days.includes(dow) && !isSkipped(e.id, tStr));
@@ -1121,43 +1139,57 @@ function renderToday(){
     // auto-expand the active event if it has a checklist
     if(isActive && hasCL && !_expanded.has(ev.id+'_seen')){
       _expanded.add(ev.id);
-      _expanded.add(ev.id+'_seen'); // only auto-expand once per session
+      _expanded.add(ev.id+'_seen');
     }
 
     const doneCount = hasCL
       ? ev.checklist.filter(i => !!checks[`${ev.id}:${i.id}`]).length
       : 0;
 
-    let clHtml = '';
-    if(hasCL && isOpen){
-      const items = ev.checklist.map(item => {
-        const doneKey = `${ev.id}:${item.id}`;
-        const done = !!checks[doneKey];
-        return `<div class="ec-check-item${done?' done':''}" data-eid="${ev.id}" data-iid="${item.id}">
-          <div class="check-box">
-            <svg width="10" height="10" viewBox="0 0 12 12" fill="none"
-                 stroke="white" stroke-width="2.5" stroke-linecap="round">
-              <polyline points="2,6 5,9 10,3"/>
-            </svg>
-          </div>
-          <div class="check-text">${item.text}</div>
+    // expanded content
+    let expandHtml = '';
+    if(isOpen){
+      if(hasCL){
+        const items = ev.checklist.map(item => {
+          const doneKey = `${ev.id}:${item.id}`;
+          const done = !!checks[doneKey];
+          return `<div class="ec-check-item${done?' done':''}" data-eid="${ev.id}" data-iid="${item.id}">
+            <div class="check-box">
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none"
+                   stroke="white" stroke-width="2.5" stroke-linecap="round">
+                <polyline points="2,6 5,9 10,3"/>
+              </svg>
+            </div>
+            <div class="check-text">${item.text}</div>
+          </div>`;
+        }).join('');
+        expandHtml = `<div class="ec-checklist">${items}</div>`;
+      } else {
+        const locRow = ev.location
+          ? `<div class="ec-detail-loc">
+               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.7;flex-shrink:0"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+               ${ev.location}
+             </div>`
+          : '';
+        expandHtml = `<div class="ec-details">
+          ${locRow}
+          <button class="ec-assign-btn" onclick="event.stopPropagation();openEditModal('${ev.id}')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            Assign list
+          </button>
         </div>`;
-      }).join('');
-      clHtml = `<div class="ec-checklist">${items}</div>`;
+      }
     }
 
-    // chevron + item count hint shown when collapsed
-    const chevron = hasCL ? `
-      <div class="ec-expand-hint">
-        ${isOpen
-          ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="18,15 12,9 6,15"/></svg>`
-          : `<span class="ec-cl-count">${doneCount}/${ev.checklist.length}</span>
-             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6,9 12,15 18,9"/></svg>`
-        }
-      </div>` : '';
+    // chevron — always shown; shows count when collapsed with CL
+    const upChev   = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="18,15 12,9 6,15"/></svg>`;
+    const downChev = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6,9 12,15 18,9"/></svg>`;
+    const chevron  = `<div class="ec-expand-hint" style="${!hasCL&&!isOpen?'opacity:.35':''}">
+      ${isOpen ? upChev : hasCL ? `<span class="ec-cl-count">${doneCount}/${ev.checklist.length}</span>${downChev}` : downChev}
+    </div>`;
 
     card.innerHTML = `
-      <div class="ec-main${hasCL?' ec-main-tap':''}" ${hasCL?`onclick="toggleCardExpand('${ev.id}')"`:''}>
+      <div class="ec-main ec-main-tap" onclick="toggleCardExpand('${ev.id}')">
         <div class="ec-info">
           <div class="ec-title">${ev.title}</div>
           <div class="ec-time">${ev.startTime}${ev.endTime?` – ${ev.endTime}`:''}</div>
@@ -1178,7 +1210,7 @@ function renderToday(){
           </button>
         </div>
       </div>
-      ${clHtml}`;
+      ${expandHtml}`;
 
     // checklist item taps
     card.querySelectorAll('.ec-check-item').forEach(row => {
@@ -1696,6 +1728,105 @@ function toggleNotifyAll(){
   scheduleNotifications();
   updateNotifyAllBtn();
   renderToday();
+}
+
+// ═══════════════════════════════════════
+// WEEK TEMPLATE MANAGEMENT
+// ═══════════════════════════════════════
+function clearTemplate(){
+  if(!confirm('Clear the entire weekly template? This cannot be undone (export a backup first if needed).')) return;
+  S.template = [];
+  save();
+  renderWeek();
+  scheduleNotifications();
+  syncPushSchedule();
+}
+
+// ═══════════════════════════════════════
+// CSV TIMETABLE IMPORT
+// ═══════════════════════════════════════
+const _CSV_DAY_MAP = {
+  mon:0, monday:0, tue:1, tuesday:1, wed:2, wednesday:2,
+  thu:3, thursday:3, fri:4, friday:4, sat:5, saturday:5, sun:6, sunday:6
+};
+const _CSV_VALID_CATS = new Set(['routine','work','gym','muaythai','football','social','travel','personal','sleep']);
+
+function _parseCSVRow(line){
+  const result = [];
+  let cur = '', inQ = false;
+  for(let i=0; i<line.length; i++){
+    if(line[i]==='"'){ inQ=!inQ; }
+    else if(line[i]===',' && !inQ){ result.push(cur); cur=''; }
+    else { cur += line[i]; }
+  }
+  result.push(cur);
+  return result.map(s=>s.trim());
+}
+
+function importTimetableCSV(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const lines = ev.target.result.replace(/\r\n/g,'\n').replace(/\r/g,'\n')
+        .split('\n').filter(l=>l.trim());
+      if(lines.length < 2) throw new Error('CSV has no data rows');
+
+      const headers = _parseCSVRow(lines[0]).map(h=>h.trim().toLowerCase().replace(/[\s_]/g,''));
+      const idx = k => headers.findIndex(h=>k.includes(h) || k.some(kk=>h.includes(kk)));
+
+      const iTitle = idx(['title','event','name']);
+      const iCat   = idx(['category','cat','type']);
+      const iDays  = idx(['days','day']);
+      const iStart = idx(['starttime','start']);
+      const iEnd   = idx(['endtime','end']);
+      const iBellAt  = idx(['bellat','bell','notify','notification']);
+      const iBellMin = idx(['bellbefore','reminder','minutesbefore','before']);
+
+      if(iTitle<0 || iDays<0 || iStart<0) throw new Error('CSV must have title, days, and startTime columns');
+
+      const events = [];
+      for(let i=1; i<lines.length; i++){
+        if(!lines[i].trim()) continue;
+        const c = _parseCSVRow(lines[i]);
+        const get = j => (j>=0 && j<c.length ? c[j].trim() : '');
+
+        const title = get(iTitle);
+        if(!title) continue;
+
+        const dayStrs = get(iDays).split(/[,\/|]/).map(d=>d.trim().toLowerCase().slice(0,3));
+        const days = dayStrs.map(d=>_CSV_DAY_MAP[d]).filter(d=>d!==undefined);
+        if(!days.length) continue;
+
+        const rawCat = get(iCat).toLowerCase();
+        const cat    = _CSV_VALID_CATS.has(rawCat) ? rawCat : 'personal';
+        const startTime = get(iStart);
+        const endTime   = get(iEnd);
+        const bellAt    = get(iBellAt).toLowerCase()==='true';
+        const bellBefore= parseInt(get(iBellMin))||0;
+
+        events.push({
+          id: uid(), title, cat, days, startTime, endTime,
+          bell: {at: bellAt, before: bellBefore},
+          checklist: [], listId: null,
+        });
+      }
+
+      if(!events.length) throw new Error('No valid events found — check column names and day abbreviations');
+      if(!confirm(`Import ${events.length} events? This will replace your current weekly template.`)) return;
+
+      S.template = events;
+      save();
+      renderWeek();
+      scheduleNotifications();
+      syncPushSchedule();
+    } catch(err){
+      alert('Could not import CSV: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
 }
 
 // ═══════════════════════════════════════
