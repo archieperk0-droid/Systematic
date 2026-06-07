@@ -225,6 +225,34 @@ body{
 }
 .check-text{font-size:13px;flex:1}
 
+/* ════════════════════════════════════
+   LISTS TAB
+════════════════════════════════════ */
+#tab-lists{display:none;flex-direction:column;height:calc(100dvh - var(--top-h) - var(--nav-h))}
+#tab-lists.on{display:flex}
+.lists-tab-header{
+  padding:14px 16px 10px;background:var(--s1);border-bottom:1px solid var(--bd);flex-shrink:0;
+}
+.lists-tab-title{
+  font-family:'JetBrains Mono',monospace;font-size:10px;
+  text-transform:uppercase;letter-spacing:.08em;color:var(--soft);margin-bottom:10px;
+}
+.lists-new-row{display:flex;gap:8px}
+.lists-new-inp{
+  flex:1;padding:9px 12px;background:var(--s3);
+  border:1px solid var(--bd2);border-radius:9px;
+  color:var(--tx);font-size:13px;outline:none;font-family:'Inter',sans-serif;
+}
+.lists-new-inp:focus{border-color:var(--accent)}
+.lists-new-btn{
+  padding:9px 16px;background:var(--accent);border:none;border-radius:9px;
+  color:#1c1410;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;
+}
+.lists-tab-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px}
+.lists-tab-empty{
+  text-align:center;padding:60px 20px;color:var(--muted);font-size:14px;
+}
+
 .rule-row{
   display:flex;align-items:center;gap:10px;
   padding:9px 12px;background:var(--s3);border-radius:8px;margin-bottom:6px;
@@ -837,7 +865,29 @@ table.tt th, table.tt td{
     </svg>
     <label>Calendar</label>
   </button>
+  <button class="nb" id="nav-lists" onclick="switchTab('lists')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+      <line x1="3" y1="6" x2="3.01" y2="6" stroke-linecap="round" stroke-width="3"/>
+      <line x1="3" y1="12" x2="3.01" y2="12" stroke-linecap="round" stroke-width="3"/>
+      <line x1="3" y1="18" x2="3.01" y2="18" stroke-linecap="round" stroke-width="3"/>
+    </svg>
+    <label>Lists</label>
+  </button>
 </nav>
+
+<!-- LISTS TAB -->
+<section class="tab" id="tab-lists">
+  <div class="lists-tab-header">
+    <div class="lists-tab-title">Lists</div>
+    <div class="lists-new-row">
+      <input class="lists-new-inp" id="lists-new-inp" type="text" placeholder="New list name…"
+             onkeydown="if(event.key==='Enter')createListFromTab()">
+      <button class="lists-new-btn" onclick="createListFromTab()">Create</button>
+    </div>
+  </div>
+  <div class="lists-tab-body" id="lists-tab-body"></div>
+</section>
 
 <!-- AUTO-ASSIGN RULES MODAL -->
 <div class="overlay" id="modal-rules">
@@ -1177,6 +1227,7 @@ function switchTab(name){
   if(name==='today')    { viewDayOffset=0; renderToday(); updateNotifyAllBtn(); }
   if(name==='week')     { weekOffset=0; renderWeek(); }
   if(name==='calendar') renderCalendar();
+  if(name==='lists')    renderListsTab();
 }
 
 // ═══════════════════════════════════════
@@ -2186,7 +2237,7 @@ function saveCurrentAsList(){
 function deleteList(id){
   if(!confirm('Delete this list?')) return;
   S.lists = S.lists.filter(l=>l.id!==id);
-  save(); updateSavedListSelect(); renderListsModal();
+  save(); _reRenderLists();
 }
 
 // ── Manage Lists modal ──
@@ -2199,15 +2250,11 @@ function closeManageLists(){
   updateSavedListSelect();
 }
 
-function renderListsModal(){
-  const body = document.getElementById('lists-body');
-  if(!S.lists.length){
-    body.innerHTML = `<div class="ml-empty">No saved lists yet.<br>Save a checklist from the event editor.</div>`;
-    return;
-  }
-  body.innerHTML = S.lists.map(list => `
-    <div class="ml-card" id="mlc-${list.id}">
-      <div class="ml-card-head" onclick="toggleMLCard('${list.id}')">
+function _listsCardHTML(list, prefix){
+  const trashSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6"/><path d="M10,11v6"/><path d="M14,11v6"/><path d="M9,6V4h6v2"/></svg>`;
+  return `
+    <div class="ml-card" id="${prefix}-${list.id}">
+      <div class="ml-card-head" onclick="toggleMLCard('${prefix}-${list.id}')">
         <input class="ml-card-name" type="text" value="${list.name.replace(/"/g,'&quot;')}"
                onclick="event.stopPropagation()"
                onblur="renameList('${list.id}',this.value)"
@@ -2215,76 +2262,104 @@ function renderListsModal(){
         <span class="ml-chevron">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6,9 12,15 18,9"/></svg>
         </span>
-        <button class="ml-card-del" onclick="event.stopPropagation();deleteList('${list.id}')" title="Delete list">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6"/><path d="M10,11v6"/><path d="M14,11v6"/><path d="M9,6V4h6v2"/>
-          </svg>
-        </button>
+        <button class="ml-card-del" onclick="event.stopPropagation();deleteList('${list.id}')" title="Delete list">${trashSvg}</button>
       </div>
       <div class="ml-items">
-        ${list.items.map((item,idx) => `
+        ${list.items.map(item => `
           <div class="ml-item-row">
             <input class="ml-item-input" type="text" value="${item.text.replace(/"/g,'&quot;')}"
                    onblur="updateListItem('${list.id}','${item.id}',this.value)"
                    onkeydown="if(event.key==='Enter')this.blur()">
-            <button class="ml-item-del" onclick="removeListItem('${list.id}','${item.id}')">×</button>
+            <button class="ml-item-del" onclick="removeListItem('${list.id}','${item.id}','${prefix}')">×</button>
           </div>`).join('')}
         <div class="ml-add-item-row">
           <input class="ml-add-input" type="text" placeholder="Add item…"
-                 id="mla-${list.id}"
-                 onkeydown="if(event.key==='Enter')addListItemFromModal('${list.id}')">
-          <button class="ml-add-btn" onclick="addListItemFromModal('${list.id}')">Add</button>
+                 id="${prefix}a-${list.id}"
+                 onkeydown="if(event.key==='Enter')addListItem('${list.id}','${prefix}')">
+          <button class="ml-add-btn" onclick="addListItem('${list.id}','${prefix}')">Add</button>
         </div>
       </div>
-    </div>`).join('');
+    </div>`;
 }
 
-function toggleMLCard(listId){
-  document.getElementById('mlc-'+listId)?.classList.toggle('open');
+function _reRenderLists(){
+  renderListsModal();
+  renderListsTab();
+  updateSavedListSelect();
+}
+
+function renderListsModal(){
+  const body = document.getElementById('lists-body');
+  if(!body) return;
+  body.innerHTML = S.lists.length
+    ? S.lists.map(l=>_listsCardHTML(l,'mlc')).join('')
+    : `<div class="ml-empty">No saved lists yet.</div>`;
+}
+
+function renderListsTab(){
+  const body = document.getElementById('lists-tab-body');
+  if(!body) return;
+  body.innerHTML = S.lists.length
+    ? S.lists.map(l=>_listsCardHTML(l,'mlt')).join('')
+    : `<div class="lists-tab-empty">No lists yet.<br>Type a name above and tap Create.</div>`;
+}
+
+function toggleMLCard(cardId){
+  document.getElementById(cardId)?.classList.toggle('open');
 }
 
 function renameList(listId, newName){
   const name = newName.trim();
   if(!name) return;
   const list = S.lists.find(l=>l.id===listId);
-  if(list){ list.name = name; save(); }
+  if(list){ list.name=name; save(); }
 }
 
 function updateListItem(listId, itemId, newText){
   const list = S.lists.find(l=>l.id===listId);
   const item = list?.items.find(i=>i.id===itemId);
-  if(item){ item.text = newText.trim(); save(); }
+  if(item){ item.text=newText.trim(); save(); }
 }
 
-function removeListItem(listId, itemId){
+function removeListItem(listId, itemId, prefix){
   const list = S.lists.find(l=>l.id===listId);
   if(!list) return;
   list.items = list.items.filter(i=>i.id!==itemId);
-  save(); renderListsModal();
-  // re-open the card that was open
-  setTimeout(()=>document.getElementById('mlc-'+listId)?.classList.add('open'), 0);
+  save(); _reRenderLists();
+  setTimeout(()=>document.getElementById(`${prefix}-${listId}`)?.classList.add('open'), 0);
 }
 
-function addListItemFromModal(listId){
-  const inp = document.getElementById('mla-'+listId);
+function addListItem(listId, prefix){
+  const inp = document.getElementById(`${prefix}a-${listId}`);
   const text = inp?.value.trim();
   if(!text) return;
   const list = S.lists.find(l=>l.id===listId);
   if(!list) return;
   list.items.push({id:uid(), text});
-  save(); renderListsModal();
+  save(); _reRenderLists();
   setTimeout(()=>{
-    document.getElementById('mlc-'+listId)?.classList.add('open');
-    document.getElementById('mla-'+listId)?.focus();
+    document.getElementById(`${prefix}-${listId}`)?.classList.add('open');
+    document.getElementById(`${prefix}a-${listId}`)?.focus();
   }, 0);
+}
+
+// Keep old name for backward compat (called from modal HTML)
+function addListItemFromModal(listId){ addListItem(listId,'mlc'); }
+
+function createListFromTab(){
+  const inp = document.getElementById('lists-new-inp');
+  const name = inp?.value.trim();
+  if(!name) return;
+  S.lists.push({id:uid(), name, items:[]});
+  save(); _reRenderLists();
+  inp.value='';
 }
 
 function startNewList(){
   const name = prompt('New list name:','');
   if(!name?.trim()) return;
   S.lists.push({id:uid(), name:name.trim(), items:[]});
-  save(); renderListsModal();
-  updateSavedListSelect();
+  save(); _reRenderLists();
 }
 
 document.getElementById('modal-lists').addEventListener('click', e=>{
