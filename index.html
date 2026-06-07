@@ -1985,11 +1985,26 @@ function toggleNotifyAll(){
 // ═══════════════════════════════════════
 // WEEK TEMPLATE MANAGEMENT
 // ═══════════════════════════════════════
+function _skipTemplateEventsForDates(dates){
+  dates.forEach(dateStr=>{
+    const dow = getDow(parseISO(dateStr));
+    S.template.filter(e=>e.days.includes(dow)).forEach(ev=>{
+      if(!S.skips[dateStr]) S.skips[dateStr]=[];
+      if(!S.skips[dateStr].includes(ev.id)) S.skips[dateStr].push(ev.id);
+    });
+  });
+}
+
 function clearMonth(){
   const monthStr = `${MONTHS[calM]} ${calY}`;
   showConfirm(`Clear all events for ${monthStr}?`, ()=>{
+    const daysInMonth = new Date(calY, calM+1, 0).getDate();
+    const dates = Array.from({length:daysInMonth}, (_,i)=>`${calY}-${pad(calM+1)}-${pad(i+1)}`);
+    // Remove one-offs for this month
     const prefix = `${calY}-${pad(calM+1)}-`;
     S.oneoffs = S.oneoffs.filter(e=>!e.date.startsWith(prefix));
+    // Skip any recurring template events on those days
+    _skipTemplateEventsForDates(dates);
     save(); renderCalendar(); scheduleNotifications(); syncPushSchedule();
   });
 }
@@ -2004,6 +2019,7 @@ function clearWeek(){
   showConfirm(`Clear all events for ${label}?`, ()=>{
     const dateSet = new Set(weekDates);
     S.oneoffs = S.oneoffs.filter(e=>!dateSet.has(e.date));
+    _skipTemplateEventsForDates(weekDates);
     save(); renderWeek(); scheduleNotifications(); syncPushSchedule();
   });
 }
