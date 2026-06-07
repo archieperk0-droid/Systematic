@@ -2924,9 +2924,8 @@ async function syncPushSchedule() {
   }
 }
 
-// Re-sync whenever events change
+// Re-sync push schedule + cloud whenever events change
 const _origSave = save;
-// Debounce sync so rapid edits don't hammer the server
 let _syncTimer = null;
 save = () => {
   _origSave();
@@ -2934,6 +2933,7 @@ save = () => {
     clearTimeout(_syncTimer);
     _syncTimer = setTimeout(syncPushSchedule, 2000);
   }
+  if(typeof cloudPush==='function') cloudPush();
 };
 
 // Also re-sync when app comes back to foreground
@@ -3092,14 +3092,10 @@ async function forceSyncNow(){
   if(btn){ btn.textContent='Sync now'; btn.disabled=false; }
 }
 
-// Patch save() to also push to cloud
-const _origSave = save;
-save = () => { _origSave(); cloudPush(); };
-
 // Pull from cloud on startup
 cloudPull();
 
-// Re-pull when the app comes back to the foreground
+// Re-pull when the app comes back to the foreground (separate from push listener above)
 document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState==='visible') cloudPull();
 });
