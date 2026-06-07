@@ -858,7 +858,7 @@ table.tt th, table.tt td{
     <button class="day-nav-btn" onclick="shiftWeek(1)" title="Next week">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9,18 15,12 9,6"/></svg>
     </button>
-    <button class="wbtn" style="color:var(--red);border-color:var(--red)" onclick="clearTemplate()" title="Clear weekly template">Clear</button>
+    <button class="wbtn" style="color:var(--red);border-color:var(--red)" onclick="clearWeek()" title="Clear this week's events">Clear</button>
     <label class="wbtn" title="Import CSV timetable" style="cursor:pointer">
       ↑ CSV
       <input type="file" accept=".csv,.txt" style="display:none" onchange="importTimetableCSV(event)">
@@ -884,6 +884,7 @@ table.tt th, table.tt td{
     <div class="cal-navs">
       <button class="cnb" onclick="shiftMonth(1)">›</button>
       <button class="cnb yr" onclick="shiftMonth(12)">yr ›</button>
+      <button class="cnb" onclick="clearMonth()" title="Clear this month's events" style="color:var(--red);border-color:var(--red);width:auto;padding:0 8px;font-size:11px">Clear</button>
     </div>
   </div>
   <div class="cal-dow">
@@ -1984,9 +1985,25 @@ function toggleNotifyAll(){
 // ═══════════════════════════════════════
 // WEEK TEMPLATE MANAGEMENT
 // ═══════════════════════════════════════
-function clearTemplate(){
-  showConfirm('Clear the entire weekly template? This cannot be undone.', ()=>{
-    S.template = [];
+function clearMonth(){
+  const monthStr = `${MONTHS[calM]} ${calY}`;
+  showConfirm(`Clear all events for ${monthStr}?`, ()=>{
+    const prefix = `${calY}-${pad(calM+1)}-`;
+    S.oneoffs = S.oneoffs.filter(e=>!e.date.startsWith(prefix));
+    save(); renderCalendar(); scheduleNotifications(); syncPushSchedule();
+  });
+}
+
+function clearWeek(){
+  const now = new Date(); now.setHours(0,0,0,0);
+  const mon = new Date(now); mon.setDate(now.getDate() - getDow(now) + weekOffset*7);
+  const weekDates = Array.from({length:7}, (_,i)=>{
+    const d = new Date(mon); d.setDate(mon.getDate()+i); return isoDate(d);
+  });
+  const label = document.getElementById('week-bar-title').textContent;
+  showConfirm(`Clear all events for ${label}?`, ()=>{
+    const dateSet = new Set(weekDates);
+    S.oneoffs = S.oneoffs.filter(e=>!dateSet.has(e.date));
     save(); renderWeek(); scheduleNotifications(); syncPushSchedule();
   });
 }
