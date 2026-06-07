@@ -803,7 +803,10 @@ table.tt th, table.tt td{
 <!-- TOPBAR -->
 <header class="topbar">
   <div class="brand">Systematic</div>
-  <div class="clock" id="clock"></div>
+  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
+    <div class="clock" id="clock"></div>
+    <div id="saved-at" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:.03em;transition:color .3s"></div>
+  </div>
   <button class="refresh-btn" id="refresh-btn" onclick="refreshCurrentTab()" title="Refresh">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
@@ -1211,7 +1214,23 @@ let S = (() => {
 })();
 if(!S.skips) S.skips = {};
 if(!S.rules) S.rules = [];
-let save = () => localStorage.setItem(KEY, JSON.stringify(S));
+let save = () => {
+  try {
+    const str = JSON.stringify(S);
+    localStorage.setItem(KEY, str);
+    // Update the saved-at indicator
+    const el = document.getElementById('saved-at');
+    if(el){
+      const now = new Date();
+      el.textContent = `saved ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      el.style.color = 'var(--accent)';
+      setTimeout(()=>{ el.style.color=''; }, 2000);
+    }
+  } catch(e) {
+    const el = document.getElementById('saved-at');
+    if(el){ el.textContent = 'save failed!'; el.style.color='var(--red)'; }
+  }
+};
 
 // ═══════════════════════════════════════
 // UTILITIES
@@ -2728,6 +2747,16 @@ function seedData(){
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
 }
+
+// Prune skips and one-offs older than 90 days so localStorage never fills up
+(()=>{
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-90);
+  const cutStr  = isoDate(cutoff);
+  let pruned = false;
+  Object.keys(S.skips||{}).forEach(d=>{ if(d<cutStr){ delete S.skips[d]; pruned=true; } });
+  if(S.oneoffs){ const before=S.oneoffs.length; S.oneoffs=S.oneoffs.filter(e=>!e.date||e.date>=cutStr); if(S.oneoffs.length!==before) pruned=true; }
+  if(pruned) save();
+})();
 
 seedData();
 updateSavedListSelect();

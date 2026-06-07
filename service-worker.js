@@ -1,4 +1,4 @@
-const CACHE = 'systematic-v9';
+const CACHE = 'systematic-v10';
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./'])));
@@ -15,9 +15,27 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request).catch(() => caches.match('./')))
-  );
+  const url = new URL(e.request.url);
+  const isHtml = url.pathname.endsWith('/') || url.pathname.endsWith('.html');
+
+  if (isHtml) {
+    // Network-first for the main page so the user always gets the latest code.
+    // Falls back to cache only when offline.
+    e.respondWith(
+      fetch(e.request, { cache: 'no-store' })
+        .then(res => {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+          return res;
+        })
+        .catch(() => caches.match(e.request).then(r => r || caches.match('./')))
+    );
+  } else {
+    // Cache-first for assets (icons, fonts, etc.)
+    e.respondWith(
+      caches.match(e.request).then(r => r || fetch(e.request).catch(() => caches.match('./')))
+    );
+  }
 });
 
 // Receive push from server → show notification on lock screen
