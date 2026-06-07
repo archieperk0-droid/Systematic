@@ -169,6 +169,21 @@ export default {
       return json({ ok: true, scheduled: (notifications || []).length });
     }
 
+    // Fire an immediate test push to a stored subscription
+    if (url.pathname === '/test' && req.method === 'POST') {
+      const { subId } = await req.json();
+      if (!subId) return json({ error: 'bad request' }, 400);
+      const raw = await env.STORE.get(`sub:${subId}`);
+      if (!raw) return json({ error: 'no subscription found for this device — open the app first' }, 404);
+      const data = JSON.parse(raw);
+      const status = await sendPush(data.subscription, {
+        title: '🔔 Systematic',
+        body:  'Push notifications are working!',
+        tag:   'test',
+      }, env);
+      return json({ ok: status < 300, status });
+    }
+
     return new Response('Systematic Push Server', { headers: CORS });
   },
 

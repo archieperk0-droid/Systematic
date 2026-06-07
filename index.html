@@ -720,6 +720,14 @@ table.tt th, table.tt td{
           </svg>
         </button>
         <div class="more-menu" id="more-menu">
+          <button class="more-menu-item" onclick="testInAppNotif();closeMoreMenu()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            Test in-app notif
+          </button>
+          <button class="more-menu-item" onclick="testPushNotif();closeMoreMenu()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="12" y1="2" x2="12" y2="4"/></svg>
+            Test push (background)
+          </button>
           <button class="more-menu-item" onclick="exportData();closeMoreMenu()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Export backup
@@ -2339,6 +2347,43 @@ save = () => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && WORKER_URL) syncPushSchedule();
 });
+
+// ═══════════════════════════════════════
+// NOTIFICATION TESTS
+// ═══════════════════════════════════════
+async function testInAppNotif() {
+  if (!('Notification' in window)) { alert('Notifications not supported on this browser.'); return; }
+  if (Notification.permission !== 'granted') {
+    const p = await Notification.requestPermission();
+    if (p !== 'granted') { alert('Permission denied — enable notifications in Settings.'); return; }
+  }
+  new Notification('🔔 Systematic', { body: 'In-app notifications are working!', icon: './icon-192.png' });
+}
+
+async function testPushNotif() {
+  if (!WORKER_URL) { alert('Push server not configured.'); return; }
+  const subId = localStorage.getItem('sys_push_id');
+  if (!subId) { alert('No push subscription yet — open the app, grant notification permission, and try again.'); return; }
+
+  // Make sure we have a fresh subscription registered first
+  await syncPushSchedule();
+
+  try {
+    const res  = await fetch(`${WORKER_URL}/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subId }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      alert('Push sent! You should receive a notification shortly.\nIf you\'re in the app you may need to background it first.');
+    } else {
+      alert(`Push failed (status ${data.status}): ${data.error || 'unknown error'}`);
+    }
+  } catch (e) {
+    alert('Could not reach push server: ' + e.message);
+  }
+}
 </script>
 </body>
 </html>
