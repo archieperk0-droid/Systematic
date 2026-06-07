@@ -2060,9 +2060,9 @@ requestNotifPermission().then(() => {
 
 // Set this to your Cloudflare Worker URL after deploying push-server/
 // Leave blank until you've deployed — the app will work without it (in-app only)
-const WORKER_URL = '';
+const WORKER_URL = 'https://systematic-push.archieperkins0.workers.dev';
 
-const VAPID_PUBLIC_KEY = 'BE4Izwr8pEgO2Al6mbt0uZnvO2WeUjjf1uOpjXrOgef_NTfaAlIHfFEaOpZtRFUf0CrL1owG5KiMvVk_y-O_dFc';
+const VAPID_PUBLIC_KEY = 'BEA3rRfmpbVjvaU7ZL_Y2xHrhJnnM6o7XenpDG_Y4x_t5OWjFQ_DQSEeCLZGtB-B6fFF1CDRxZu3iZgAXR2YAcQ';
 
 function urlB64ToUint8(b64) {
   const pad = '='.repeat((4 - b64.length % 4) % 4);
