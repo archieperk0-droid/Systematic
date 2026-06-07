@@ -980,27 +980,30 @@ table.tt th, table.tt td{
   <div class="sheet">
     <div class="sheet-handle"></div>
     <div class="sheet-title">Cloud Sync</div>
-    <p style="font-size:13px;color:var(--soft);line-height:1.5;margin-bottom:16px">
-      Your sync code links all your devices to the same data. Keep it private.
-    </p>
-    <div style="margin-bottom:18px">
-      <div style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:.06em;margin-bottom:6px">YOUR SYNC CODE</div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <div id="sync-code-display" style="flex:1;font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--accent);background:var(--s3);border:1px solid var(--bd2);border-radius:9px;padding:11px 14px;letter-spacing:.08em"></div>
-        <button onclick="copySyncCode()" style="padding:11px 14px;background:var(--s3);border:1px solid var(--bd2);border-radius:9px;color:var(--soft);font-size:12px;cursor:pointer;flex-shrink:0" id="sync-copy-btn">Copy</button>
+
+    <!-- Step 1: your code -->
+    <div style="background:var(--s2);border:1px solid var(--bd2);border-radius:12px;padding:14px;margin-bottom:14px">
+      <div style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:.06em;margin-bottom:8px">STEP 1 — YOUR SYNC CODE</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <div id="sync-code-display" style="flex:1;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--accent);background:var(--s3);border:1px solid var(--bd2);border-radius:8px;padding:10px 12px;letter-spacing:.06em;word-break:break-all"></div>
+        <button onclick="copySyncCode()" id="sync-copy-btn" style="padding:10px 14px;background:var(--s3);border:1px solid var(--bd2);border-radius:8px;color:var(--soft);font-size:12px;cursor:pointer;flex-shrink:0;font-family:inherit">Copy</button>
       </div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5">Copy this code, then open <strong style="color:var(--soft)">Sync settings</strong> on your other device and paste it below.</div>
     </div>
-    <div style="margin-bottom:20px">
-      <div style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:.06em;margin-bottom:6px">USE A DIFFERENT CODE</div>
-      <div style="display:flex;gap:8px">
-        <input id="sync-code-inp" type="text" placeholder="Paste sync code…"
-          style="flex:1;padding:10px 12px;background:var(--s3);border:1px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:13px;font-family:'JetBrains Mono',monospace;outline:none">
-        <button onclick="applySyncCode()" style="padding:10px 16px;background:var(--accent);border:none;border-radius:9px;color:#1c1410;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0">Apply</button>
+
+    <!-- Step 2: link another device -->
+    <div style="background:var(--s2);border:1px solid var(--bd2);border-radius:12px;padding:14px;margin-bottom:14px">
+      <div style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:.06em;margin-bottom:8px">STEP 2 — LINK THIS DEVICE</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input id="sync-code-inp" type="text" placeholder="Paste code from other device…"
+          style="flex:1;padding:10px 12px;background:var(--s3);border:1px solid var(--bd2);border-radius:8px;color:var(--tx);font-size:13px;font-family:'JetBrains Mono',monospace;outline:none;min-width:0">
+        <button onclick="applySyncCode()" style="padding:10px 14px;background:var(--accent);border:none;border-radius:8px;color:#1c1410;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;font-family:inherit">Link</button>
       </div>
-      <div style="font-size:11px;color:var(--muted);margin-top:6px">Enter the code from your other device to share data between them.</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5">Only do this on your <strong style="color:var(--soft)">other</strong> device. This replaces its data with the linked account.</div>
     </div>
-    <div id="sync-status-row" style="font-size:12px;color:var(--muted);margin-bottom:16px;font-family:'JetBrains Mono',monospace"></div>
-    <button onclick="forceSyncNow()" style="width:100%;padding:12px;background:var(--s3);border:1px solid var(--bd2);border-radius:11px;color:var(--tx);font-size:14px;cursor:pointer;margin-bottom:10px">Sync now</button>
+
+    <div id="sync-status-row" style="font-size:11px;color:var(--muted);margin-bottom:12px;font-family:'JetBrains Mono',monospace;text-align:center"></div>
+    <button id="sync-now-btn" onclick="forceSyncNow()" style="width:100%;padding:12px;background:var(--s3);border:1px solid var(--bd2);border-radius:11px;color:var(--tx);font-size:14px;cursor:pointer;font-family:inherit;margin-bottom:10px">Sync now</button>
     <button class="btn-cancel" style="width:100%" onclick="closeSyncModal()">Done</button>
   </div>
 </div>
@@ -3084,11 +3087,20 @@ function applySyncCode(){
 }
 
 async function forceSyncNow(){
-  const btn = document.querySelector('#modal-sync button[onclick="forceSyncNow()"]');
+  const btn = document.getElementById('sync-now-btn');
   if(btn){ btn.textContent='Syncing…'; btn.disabled=true; }
-  S._ts = Date.now();
-  save();
-  await Promise.all([cloudPull(), cloudPush()]);
+  try {
+    // Push current state immediately (bypass debounce)
+    S._ts = Date.now();
+    localStorage.setItem(KEY, JSON.stringify(S));
+    await fetch(`${WORKER_URL}/sync?id=${encodeURIComponent(getSyncId())}`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(S)
+    });
+    _lastCloudPush = Date.now();
+    // Then pull to get any changes from the other device
+    await cloudPull();
+  } catch(e){}
+  _updateSyncStatus();
   if(btn){ btn.textContent='Sync now'; btn.disabled=false; }
 }
 
