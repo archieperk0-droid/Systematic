@@ -747,8 +747,13 @@ table.tt th, table.tt td{
 <!-- WEEK TAB -->
 <section class="tab" id="tab-week">
   <div class="week-bar">
-    <button class="wbtn" onclick="switchTab('today')">Today</button>
-    <div class="week-bar-title">Weekly Template</div>
+    <button class="day-nav-btn" onclick="shiftWeek(-1)" title="Previous week">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15,18 9,12 15,6"/></svg>
+    </button>
+    <div class="week-bar-title" id="week-bar-title" style="flex:1;cursor:pointer" onclick="weekOffset=0;renderWeek()">This week</div>
+    <button class="day-nav-btn" onclick="shiftWeek(1)" title="Next week">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9,18 15,12 9,6"/></svg>
+    </button>
     <button class="wbtn" style="color:var(--red);border-color:var(--red)" onclick="clearTemplate()" title="Clear weekly template">Clear</button>
     <label class="wbtn" title="Import CSV timetable" style="cursor:pointer">
       ↑ CSV
@@ -1071,6 +1076,14 @@ function shiftViewDay(n) {
   updateNotifyAllBtn();
 }
 
+// Week tab offset (0 = current week, ±n = n weeks ahead/behind)
+let weekOffset = 0;
+
+function shiftWeek(n) {
+  weekOffset += n;
+  renderWeek();
+}
+
 // which event cards are currently expanded (in-memory only)
 const _expanded = new Set();
 
@@ -1088,7 +1101,7 @@ function switchTab(name){
   document.getElementById('tab-'+name).classList.add('on');
   document.getElementById('nav-'+name).classList.add('on');
   if(name==='today')    { viewDayOffset=0; renderToday(); updateNotifyAllBtn(); }
-  if(name==='week')     renderWeek();
+  if(name==='week')     { weekOffset=0; renderWeek(); }
   if(name==='calendar') renderCalendar();
 }
 
@@ -1252,29 +1265,47 @@ function renderWeek(){
   const now = new Date();
   const todayDow = getDow(now);
 
-  // Build week dates for column headers (based on this actual week)
+  // Monday of the viewed week
   const mon = new Date(now);
-  mon.setDate(now.getDate() - todayDow);
+  mon.setDate(now.getDate() - todayDow + weekOffset * 7);
+  mon.setHours(0,0,0,0);
+
   const weekDays = Array.from({length:7},(_,i)=>{
     const d=new Date(mon); d.setDate(mon.getDate()+i); return d;
   });
 
-  // Header row
+  // Update week-bar title
+  const titleEl = document.getElementById('week-bar-title');
+  if(titleEl){
+    if(weekOffset === 0){
+      titleEl.textContent = 'This week';
+    } else {
+      const d0=weekDays[0], d6=weekDays[6];
+      const sameMonth = d0.getMonth()===d6.getMonth();
+      titleEl.textContent = `${d0.getDate()}${sameMonth?'':' '+MONTHS[d0.getMonth()]} – ${d6.getDate()} ${MONTHS[d6.getMonth()]}`;
+    }
+  }
+
+  // Header row — highlight today column only on current week
   const headRow = document.getElementById('tt-head-row');
   headRow.innerHTML = `<th class="tt-corner"></th>`;
   weekDays.forEach((d,i) => {
+    const isToday = weekOffset===0 && i===todayDow;
     const th = document.createElement('th');
-    th.className = 'tt-th' + (i===todayDow ? ' today-head' : '');
+    th.className = 'tt-th' + (isToday ? ' today-head' : '');
     th.innerHTML = `<span class="tt-dname">${DSHORT[i]}</span><span class="tt-dnum">${d.getDate()}</span>`;
     headRow.appendChild(th);
   });
 
-  // Pre-process events: for each day column build startingAt & skipSlot
+  // Pre-process events: template + one-offs for this specific week
   const startingAt = Array.from({length:7}, () => ({}));
   const skipSlot   = Array.from({length:7}, () => new Set());
 
   for(let di=0; di<7; di++){
-    const evs = S.template.filter(e=>e.days.includes(di))
+    const dateStr = isoDate(weekDays[di]);
+    const templateEvs = S.template.filter(e=>e.days.includes(di) && !isSkipped(e.id,dateStr));
+    const oneoffEvs   = S.oneoffs.filter(e=>e.date===dateStr && !isSkipped(e.id,dateStr));
+    const evs = [...templateEvs,...oneoffEvs]
       .sort((a,b)=>timeMins(a.startTime)-timeMins(b.startTime));
     evs.forEach(ev => {
       const s = timeToSlot(ev.startTime);
