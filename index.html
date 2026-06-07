@@ -253,6 +253,48 @@ body{
   text-align:center;padding:60px 20px;color:var(--muted);font-size:14px;
 }
 
+.ml-auto-section{
+  display:none;border-top:1px solid var(--bd);padding:10px 12px 12px;
+}
+.ml-card.open .ml-auto-section{display:block}
+.ml-auto-label{
+  font-size:10px;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--muted);font-family:'JetBrains Mono',monospace;margin-bottom:8px;
+}
+.ml-auto-rule{
+  display:flex;align-items:center;gap:7px;padding:5px 8px;
+  background:var(--s2);border-radius:7px;margin-bottom:5px;
+}
+.ml-auto-rule-name{flex:1;font-size:13px;font-weight:500}
+.ml-auto-rule-cat{
+  font-size:10px;font-family:'JetBrains Mono',monospace;
+  color:var(--muted);letter-spacing:.04em;
+}
+.ml-auto-rule-del{
+  background:none;border:none;cursor:pointer;color:var(--muted);
+  font-size:14px;padding:0 2px;line-height:1;transition:color .12s;
+}
+.ml-auto-rule-del:hover{color:var(--red)}
+.ml-auto-add{display:flex;gap:6px;margin-top:7px}
+.ml-auto-name-inp{
+  flex:1;padding:7px 10px;background:var(--s3);
+  border:1px solid var(--bd2);border-radius:7px;
+  color:var(--tx);font-size:12px;outline:none;font-family:'Inter',sans-serif;
+  min-width:0;
+}
+.ml-auto-name-inp:focus{border-color:var(--accent)}
+.ml-auto-cat-sel{
+  padding:7px 8px;background:var(--s3);border:1px solid var(--bd2);
+  border-radius:7px;color:var(--soft);font-size:11px;outline:none;
+  -webkit-appearance:none;flex-shrink:0;
+}
+.ml-auto-link-btn{
+  padding:7px 12px;background:var(--s3);border:1px solid var(--bd2);
+  border-radius:7px;color:var(--accent);font-size:12px;font-weight:600;
+  cursor:pointer;flex-shrink:0;white-space:nowrap;transition:background .12s;
+}
+.ml-auto-link-btn:hover{background:var(--accent-d)}
+
 .rule-row{
   display:flex;align-items:center;gap:10px;
   padding:9px 12px;background:var(--s3);border-radius:8px;margin-bottom:6px;
@@ -2250,8 +2292,24 @@ function closeManageLists(){
   updateSavedListSelect();
 }
 
+const _CAT_OPTIONS = ['routine','work','gym','muaythai','football','social','travel','personal','sleep']
+  .map(c=>`<option value="${c}">${c[0].toUpperCase()+c.slice(1)}</option>`).join('');
+
 function _listsCardHTML(list, prefix){
   const trashSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6"/><path d="M10,11v6"/><path d="M14,11v6"/><path d="M9,6V4h6v2"/></svg>`;
+
+  // Rules paired to this list
+  const linkedRules = S.rules
+    .map((r,i)=>({...r,_i:i}))
+    .filter(r=>r.listId===list.id);
+
+  const rulesHTML = linkedRules.map(r=>`
+    <div class="ml-auto-rule">
+      <span class="ml-auto-rule-name">${r.name}</span>
+      <span class="ml-auto-rule-cat">${r.cat}</span>
+      <button class="ml-auto-rule-del" onclick="deleteRuleFromList(${r._i},'${prefix}')">×</button>
+    </div>`).join('');
+
   return `
     <div class="ml-card" id="${prefix}-${list.id}">
       <div class="ml-card-head" onclick="toggleMLCard('${prefix}-${list.id}')">
@@ -2277,6 +2335,17 @@ function _listsCardHTML(list, prefix){
                  id="${prefix}a-${list.id}"
                  onkeydown="if(event.key==='Enter')addListItem('${list.id}','${prefix}')">
           <button class="ml-add-btn" onclick="addListItem('${list.id}','${prefix}')">Add</button>
+        </div>
+      </div>
+      <div class="ml-auto-section">
+        <div class="ml-auto-label">Auto-assign to events named</div>
+        ${rulesHTML}
+        <div class="ml-auto-add">
+          <input class="ml-auto-name-inp" type="text" placeholder="Event name…"
+                 id="${prefix}rn-${list.id}"
+                 onkeydown="if(event.key==='Enter')addRuleForList('${list.id}','${prefix}')">
+          <select class="ml-auto-cat-sel" id="${prefix}rc-${list.id}">${_CAT_OPTIONS}</select>
+          <button class="ml-auto-link-btn" onclick="addRuleForList('${list.id}','${prefix}')">Link</button>
         </div>
       </div>
     </div>`;
@@ -2345,6 +2414,33 @@ function addListItem(listId, prefix){
 
 // Keep old name for backward compat (called from modal HTML)
 function addListItemFromModal(listId){ addListItem(listId,'mlc'); }
+
+function addRuleForList(listId, prefix){
+  const nameInp = document.getElementById(`${prefix}rn-${listId}`);
+  const catSel  = document.getElementById(`${prefix}rc-${listId}`);
+  const name = nameInp?.value.trim();
+  const cat  = catSel?.value || 'personal';
+  if(!name) return;
+  const existing = S.rules.findIndex(r=>r.name.toLowerCase()===name.toLowerCase());
+  const rule = { name, cat, listId };
+  if(existing>=0) S.rules[existing]=rule; else S.rules.push(rule);
+  save(); _reRenderLists();
+  // re-open card after re-render
+  setTimeout(()=>{
+    document.getElementById(`${prefix}-${listId}`)?.classList.add('open');
+  }, 0);
+}
+
+function deleteRuleFromList(ruleIdx, prefix){
+  if(ruleIdx<0||ruleIdx>=S.rules.length) return;
+  // find which list the card belongs to so we can re-open it
+  const listId = S.rules[ruleIdx]?.listId;
+  S.rules.splice(ruleIdx,1);
+  save(); _reRenderLists();
+  if(listId) setTimeout(()=>{
+    document.getElementById(`${prefix}-${listId}`)?.classList.add('open');
+  }, 0);
+}
 
 function createListFromTab(){
   const inp = document.getElementById('lists-new-inp');
