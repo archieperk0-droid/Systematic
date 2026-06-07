@@ -247,6 +247,22 @@ body{
 .lists-tab-title{
   font-family:'JetBrains Mono',monospace;font-size:10px;
   text-transform:uppercase;letter-spacing:.08em;color:var(--soft);margin-bottom:10px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.lists-save-btn{
+  background:none;border:1px solid var(--bd2);border-radius:7px;
+  padding:4px 10px;font-size:11px;font-weight:600;color:var(--soft);
+  cursor:pointer;font-family:'JetBrains Mono',monospace;letter-spacing:.04em;
+  transition:color .15s,border-color .15s;flex-shrink:0;
+}
+.lists-save-btn.saved{color:var(--accent);border-color:var(--accent)}
+@keyframes fade-out{from{opacity:1}to{opacity:0}}
+.save-toast{
+  position:fixed;bottom:calc(var(--nav-h) + 14px);left:50%;transform:translateX(-50%);
+  background:var(--s2);border:1px solid var(--accent);border-radius:10px;
+  padding:8px 18px;font-size:13px;color:var(--accent);font-weight:600;
+  pointer-events:none;animation:fade-out .4s ease 1.4s forwards;z-index:1500;
+  white-space:nowrap;
 }
 .lists-new-row{display:flex;gap:8px}
 .lists-new-inp{
@@ -939,7 +955,10 @@ table.tt th, table.tt td{
 <!-- LISTS TAB -->
 <section class="tab" id="tab-lists">
   <div class="lists-tab-header">
-    <div class="lists-tab-title">Lists</div>
+    <div class="lists-tab-title">
+      <span>Lists</span>
+      <button class="lists-save-btn" id="lists-save-btn" onclick="saveListsExplicit()">Save</button>
+    </div>
     <div class="lists-new-row">
       <input class="lists-new-inp" id="lists-new-inp" type="text" placeholder="New list name…"
              onkeydown="if(event.key==='Enter')createListFromTab()">
@@ -2577,6 +2596,20 @@ function deleteRuleFromList(ruleIdx, prefix){
   }, 0);
 }
 
+function saveListsExplicit(){
+  // Flush any focused input first so its value is captured
+  if(document.activeElement && document.activeElement.tagName==='INPUT'){
+    document.activeElement.blur();
+  }
+  save();
+  const btn = document.getElementById('lists-save-btn');
+  if(btn){ btn.classList.add('saved'); setTimeout(()=>btn.classList.remove('saved'), 1800); }
+  const toast = document.createElement('div');
+  toast.className = 'save-toast'; toast.textContent = 'Saved ✓';
+  document.body.appendChild(toast);
+  toast.addEventListener('animationend', ()=>toast.remove());
+}
+
 function createListFromTab(){
   const inp = document.getElementById('lists-new-inp');
   const name = inp?.value.trim();
@@ -2699,6 +2732,10 @@ if('serviceWorker' in navigator){
 seedData();
 updateSavedListSelect();
 updateNotifyAllBtn();
+
+// Flush any in-progress input edits before iOS kills the page
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') save(); });
+window.addEventListener('pagehide', ()=>save());
 
 tickClock();
 setInterval(tickClock, 30000);
