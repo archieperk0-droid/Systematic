@@ -1652,9 +1652,9 @@ function renderCalendar(){
     // Template recurring
     const d = parseISO(dateStr);
     const dow = getDow(d);
-    S.template.filter(e=>e.days.includes(dow)).forEach(e=>addEvByDate(dateStr,e));
+    S.template.filter(e=>e.days.includes(dow) && !isSkipped(e.id,dateStr)).forEach(e=>addEvByDate(dateStr,e));
     // One-offs
-    S.oneoffs.filter(e=>e.date===dateStr).forEach(e=>addEvByDate(dateStr,e));
+    S.oneoffs.filter(e=>e.date===dateStr && !isSkipped(e.id,dateStr)).forEach(e=>addEvByDate(dateStr,e));
   }
 
   for(let i=0;i<total;i++){
