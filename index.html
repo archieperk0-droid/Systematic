@@ -225,6 +225,19 @@ body{
 }
 .check-text{font-size:13px;flex:1}
 
+.rule-row{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 12px;background:var(--s3);border-radius:8px;margin-bottom:6px;
+}
+.rule-info{flex:1;min-width:0}
+.rule-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rule-meta{font-size:11px;color:var(--muted);margin-top:2px;font-family:'JetBrains Mono',monospace;letter-spacing:.03em}
+.rule-del{
+  background:none;border:none;cursor:pointer;color:var(--muted);
+  font-size:14px;padding:4px;flex-shrink:0;transition:color .12s;
+}
+.rule-del:hover{color:var(--red)}
+
 .ec-details{
   border-top:1px solid var(--bd);
   padding:10px 14px 12px;display:flex;flex-direction:column;gap:8px;
@@ -720,6 +733,10 @@ table.tt th, table.tt td{
           </svg>
         </button>
         <div class="more-menu" id="more-menu">
+          <button class="more-menu-item" onclick="openRulesModal();closeMoreMenu()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+            Auto-assign rules
+          </button>
           <button class="more-menu-item" onclick="testInAppNotif();closeMoreMenu()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
             Test in-app notif
@@ -821,6 +838,45 @@ table.tt th, table.tt td{
     <label>Calendar</label>
   </button>
 </nav>
+
+<!-- AUTO-ASSIGN RULES MODAL -->
+<div class="overlay" id="modal-rules">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div class="sheet-title" style="margin:0">Auto-assign rules</div>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">When a CSV event name matches, automatically apply a category and list. Saves manual re-assignment on every import.</p>
+    <div id="rules-list"></div>
+    <div class="divider" style="margin:14px 0 12px">Add rule</div>
+    <div class="fld">
+      <label>Event name (exact match)</label>
+      <input id="rule-name-inp" type="text" placeholder="e.g. Morning System">
+    </div>
+    <div class="fld-row">
+      <div class="fld">
+        <label>Category</label>
+        <select id="rule-cat-inp">
+          <option value="routine">Routine</option>
+          <option value="work">Work</option>
+          <option value="gym">Gym</option>
+          <option value="muaythai">Muay Thai</option>
+          <option value="football">Football</option>
+          <option value="social">Social</option>
+          <option value="travel">Travel</option>
+          <option value="personal">Personal</option>
+          <option value="sleep">Sleep</option>
+        </select>
+      </div>
+      <div class="fld">
+        <label>Assign list</label>
+        <select id="rule-list-sel" class="saved-list-sel"></select>
+      </div>
+    </div>
+    <button class="btn-ok" style="width:100%;margin-bottom:10px" onclick="addRule()">Add rule</button>
+    <button class="btn-cancel" style="width:100%" onclick="closeRulesModal()">Done</button>
+  </div>
+</div>
 
 <!-- EVENT EDITOR MODAL -->
 <div class="overlay" id="modal-ev">
@@ -1004,9 +1060,10 @@ const FULLDAY = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Sa
 const KEY = 'seize_v2';
 let S = (() => {
   try { const r=localStorage.getItem(KEY); if(r) return JSON.parse(r); } catch(e){}
-  return { v:2, template:[], oneoffs:[], checks:{}, skips:{}, lists:[] };
+  return { v:2, template:[], oneoffs:[], checks:{}, skips:{}, lists:[], rules:[] };
 })();
 if(!S.skips) S.skips = {};
+if(!S.rules) S.rules = [];
 let save = () => localStorage.setItem(KEY, JSON.stringify(S));
 
 // ═══════════════════════════════════════
@@ -1020,6 +1077,23 @@ const today  = ()  => isoDate(new Date());
 function getDow(d){            // 0=Mon … 6=Sun
   const w = d.getDay();        // 0=Sun
   return w === 0 ? 6 : w - 1;
+}
+function addMins(t, m){
+  const [h,mm] = t.split(':').map(Number);
+  const total = h*60+mm+m;
+  return `${pad(Math.floor(total/60)%24)}:${pad(total%60)}`;
+}
+function inferCat(name){
+  const n = name.toLowerCase();
+  if(/gym|run|workout|fitness/.test(n))        return 'gym';
+  if(/football|footy|soccer/.test(n))          return 'football';
+  if(/muay|thai|boxing/.test(n))               return 'muaythai';
+  if(/travel|commute|transit/.test(n))         return 'travel';
+  if(/sleep|bed/.test(n))                      return 'sleep';
+  if(/morning|evening|system|routine/.test(n)) return 'routine';
+  if(/work|office|signify|home day/.test(n))   return 'work';
+  if(/social|friend|party/.test(n))            return 'social';
+  return 'personal';
 }
 function timeMins(t){
   if(!t) return 0;
@@ -1782,14 +1856,8 @@ function clearTemplate(){
 }
 
 // ═══════════════════════════════════════
-// CSV TIMETABLE IMPORT
+// CSV TIMETABLE IMPORT  (grid format)
 // ═══════════════════════════════════════
-const _CSV_DAY_MAP = {
-  mon:0, monday:0, tue:1, tuesday:1, wed:2, wednesday:2,
-  thu:3, thursday:3, fri:4, friday:4, sat:5, saturday:5, sun:6, sunday:6
-};
-const _CSV_VALID_CATS = new Set(['routine','work','gym','muaythai','football','social','travel','personal','sleep']);
-
 function _parseCSVRow(line){
   const result = [];
   let cur = '', inQ = false;
@@ -1808,58 +1876,80 @@ function importTimetableCSV(e){
   const reader = new FileReader();
   reader.onload = ev => {
     try {
-      const lines = ev.target.result.replace(/\r\n/g,'\n').replace(/\r/g,'\n')
-        .split('\n').filter(l=>l.trim());
-      if(lines.length < 2) throw new Error('CSV has no data rows');
+      const rawLines = ev.target.result.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
 
-      const headers = _parseCSVRow(lines[0]).map(h=>h.trim().toLowerCase().replace(/[\s_]/g,''));
-      const idx = k => headers.findIndex(h=>k.includes(h) || k.some(kk=>h.includes(kk)));
+      // 1. Find header row containing day names
+      const DAY_WORDS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+      let headerIdx = -1;
+      const dayColMap = {}; // di 0–6 → column index
+      for(let i=0; i<rawLines.length; i++){
+        const cols = _parseCSVRow(rawLines[i]).map(c=>c.toLowerCase());
+        let hits = 0;
+        DAY_WORDS.forEach((d,di)=>{ const ci=cols.indexOf(d); if(ci>=0){dayColMap[di]=ci; hits++;} });
+        if(hits>=5){ headerIdx=i; break; }
+      }
+      if(headerIdx<0) throw new Error('No day-name header row found (needs Monday … Sunday)');
 
-      const iTitle = idx(['title','event','name']);
-      const iCat   = idx(['category','cat','type']);
-      const iDays  = idx(['days','day']);
-      const iStart = idx(['starttime','start']);
-      const iEnd   = idx(['endtime','end']);
-      const iBellAt  = idx(['bellat','bell','notify','notification']);
-      const iBellMin = idx(['bellbefore','reminder','minutesbefore','before']);
+      // 2. Find time column (first column containing HH:MM values after header)
+      let timeColIdx = -1;
+      for(let i=headerIdx+1; i<rawLines.length; i++){
+        const cols = _parseCSVRow(rawLines[i]);
+        for(let ci=0; ci<cols.length; ci++){
+          if(/^\d{1,2}:\d{2}$/.test(cols[ci])){ timeColIdx=ci; break; }
+        }
+        if(timeColIdx>=0) break;
+      }
+      if(timeColIdx<0) throw new Error('No time column found (expected HH:MM values)');
 
-      if(iTitle<0 || iDays<0 || iStart<0) throw new Error('CSV must have title, days, and startTime columns');
-
-      const events = [];
-      for(let i=1; i<lines.length; i++){
-        if(!lines[i].trim()) continue;
-        const c = _parseCSVRow(lines[i]);
-        const get = j => (j>=0 && j<c.length ? c[j].trim() : '');
-
-        const title = get(iTitle);
-        if(!title) continue;
-
-        const dayStrs = get(iDays).split(/[,\/|]/).map(d=>d.trim().toLowerCase().slice(0,3));
-        const days = dayStrs.map(d=>_CSV_DAY_MAP[d]).filter(d=>d!==undefined);
-        if(!days.length) continue;
-
-        const rawCat = get(iCat).toLowerCase();
-        const cat    = _CSV_VALID_CATS.has(rawCat) ? rawCat : 'personal';
-        const startTime = get(iStart);
-        const endTime   = get(iEnd);
-        const bellAt    = get(iBellAt).toLowerCase()==='true';
-        const bellBefore= parseInt(get(iBellMin))||0;
-
-        events.push({
-          id: uid(), title, cat, days, startTime, endTime,
-          bell: {at: bellAt, before: bellBefore},
-          checklist: [], listId: null,
-        });
+      // 3. Collect event slots per day
+      const slotsByDay = Array.from({length:7}, ()=>[]); // [{name, time}]
+      for(let i=headerIdx+1; i<rawLines.length; i++){
+        const cols = _parseCSVRow(rawLines[i]);
+        const t = cols[timeColIdx] || '';
+        if(!/^\d{1,2}:\d{2}$/.test(t)) continue;
+        for(let di=0; di<7; di++){
+          const ci = dayColMap[di];
+          if(ci===undefined || ci>=cols.length) continue;
+          const name = cols[ci].trim();
+          if(!name) continue;
+          slotsByDay[di].push({ name, time:t });
+        }
       }
 
-      if(!events.length) throw new Error('No valid events found — check column names and day abbreviations');
-      if(!confirm(`Import ${events.length} events? This will replace your current weekly template.`)) return;
+      // 4. Derive endTime = next event's startTime (or +60 min for last)
+      //    Group identical (name, startTime, endTime) across days
+      const evMap = {};
+      for(let di=0; di<7; di++){
+        const slots = slotsByDay[di];
+        for(let si=0; si<slots.length; si++){
+          const { name, time:startTime } = slots[si];
+          const endTime = si+1<slots.length ? slots[si+1].time : addMins(startTime,60);
+          const key = `${name.toLowerCase()}|${startTime}|${endTime}`;
+          if(!evMap[key]) evMap[key]={name,startTime,endTime,days:[]};
+          if(!evMap[key].days.includes(di)) evMap[key].days.push(di);
+        }
+      }
 
+      // 5. Apply auto-rules → cat + list; build template events
+      const events = Object.values(evMap).map(ev=>{
+        const rule   = S.rules.find(r=>r.name.toLowerCase()===ev.name.toLowerCase());
+        const cat    = rule?.cat    || inferCat(ev.name);
+        const listId = rule?.listId || null;
+        const srcList = listId ? S.lists.find(l=>l.id===listId) : null;
+        const bell   = { ...(CAT_BELL[cat]||{at:false,before:0}) };
+        return {
+          id:uid(), title:ev.name, cat,
+          days:[...ev.days].sort((a,b)=>a-b),
+          startTime:ev.startTime, endTime:ev.endTime, bell,
+          checklist: srcList ? srcList.items.map(i=>({...i,id:uid()})) : [],
+          listId: listId||null,
+        };
+      });
+
+      if(!events.length) throw new Error('No events found in the CSV');
+      if(!confirm(`Import ${events.length} events? This will replace your current weekly template.`)) return;
       S.template = events;
-      save();
-      renderWeek();
-      scheduleNotifications();
-      syncPushSchedule();
+      save(); renderWeek(); scheduleNotifications(); syncPushSchedule();
     } catch(err){
       alert('Could not import CSV: ' + err.message);
     }
@@ -1919,6 +2009,61 @@ function importData(e){
 // Tap outside sheet to close
 document.getElementById('modal-ev').addEventListener('click',e=>{
   if(e.target===e.currentTarget) closeModal();
+});
+
+// ═══════════════════════════════════════
+// AUTO-ASSIGN RULES
+// ═══════════════════════════════════════
+function openRulesModal(){
+  _refreshRuleListSel();
+  renderRulesModal();
+  document.getElementById('modal-rules').classList.add('open');
+}
+function closeRulesModal(){
+  document.getElementById('modal-rules').classList.remove('open');
+}
+function _refreshRuleListSel(){
+  const sel = document.getElementById('rule-list-sel');
+  if(!sel) return;
+  sel.innerHTML = '<option value="">— No list —</option>' +
+    S.lists.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
+}
+function renderRulesModal(){
+  const list = document.getElementById('rules-list');
+  if(!S.rules.length){
+    list.innerHTML = '<p style="color:var(--muted);font-size:13px;text-align:center;padding:12px 0">No rules yet. Add one below.</p>';
+    return;
+  }
+  list.innerHTML = S.rules.map((r,i)=>{
+    const listName = r.listId ? (S.lists.find(l=>l.id===r.listId)?.name||'—') : '—';
+    return `<div class="rule-row">
+      <div class="rule-info">
+        <div class="rule-name">${r.name}</div>
+        <div class="rule-meta">${r.cat}${r.listId?' · '+listName:''}</div>
+      </div>
+      <button class="rule-del" onclick="deleteRule(${i})">✕</button>
+    </div>`;
+  }).join('');
+}
+function addRule(){
+  const name   = document.getElementById('rule-name-inp').value.trim();
+  const cat    = document.getElementById('rule-cat-inp').value;
+  const listId = document.getElementById('rule-list-sel').value || null;
+  if(!name){ alert('Enter an event name'); return; }
+  const idx = S.rules.findIndex(r=>r.name.toLowerCase()===name.toLowerCase());
+  if(idx>=0) S.rules[idx]={name,cat,listId};
+  else S.rules.push({name,cat,listId});
+  save();
+  document.getElementById('rule-name-inp').value='';
+  renderRulesModal();
+}
+function deleteRule(i){
+  S.rules.splice(i,1);
+  save();
+  renderRulesModal();
+}
+document.getElementById('modal-rules').addEventListener('click',e=>{
+  if(e.target===e.currentTarget) closeRulesModal();
 });
 
 // ═══════════════════════════════════════
