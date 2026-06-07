@@ -169,6 +169,28 @@ export default {
       return json({ ok: true, scheduled: (notifications || []).length });
     }
 
+    // ── Cloud sync ──────────────────────────────────────────────────────────────
+    // GET  /sync?id=<syncId>  → return stored state (or {found:false})
+    // POST /sync?id=<syncId>  → store state blob (max 4 MB)
+    if (url.pathname === '/sync') {
+      const id = url.searchParams.get('id');
+      if (!id || id.length < 8) return json({ error: 'bad request' }, 400);
+      const key = `sync:${id}`;
+
+      if (req.method === 'GET') {
+        const raw = await env.STORE.get(key);
+        if (!raw) return json({ found: false });
+        return new Response(raw, { headers: { ...CORS, 'Content-Type': 'application/json' } });
+      }
+
+      if (req.method === 'POST') {
+        const body = await req.text();
+        if (!body || body.length > 4 * 1024 * 1024) return json({ error: 'too large' }, 413);
+        await env.STORE.put(key, body, { expirationTtl: 60 * 60 * 24 * 90 }); // 90-day TTL
+        return json({ ok: true });
+      }
+    }
+
     // Fire an immediate test push to a stored subscription
     if (url.pathname === '/test' && req.method === 'POST') {
       const { subId } = await req.json();

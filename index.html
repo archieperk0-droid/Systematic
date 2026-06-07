@@ -851,6 +851,10 @@ table.tt th, table.tt td{
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="12" y1="2" x2="12" y2="4"/></svg>
             Test push (background)
           </button>
+          <button class="more-menu-item" onclick="openSyncModal();closeMoreMenu()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Sync settings
+          </button>
           <button class="more-menu-item" onclick="exportData();closeMoreMenu()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Export backup
@@ -970,6 +974,36 @@ table.tt th, table.tt td{
   </div>
   <div class="lists-tab-body" id="lists-tab-body"></div>
 </section>
+
+<!-- SYNC MODAL -->
+<div class="overlay" id="modal-sync">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Cloud Sync</div>
+    <p style="font-size:13px;color:var(--soft);line-height:1.5;margin-bottom:16px">
+      Your sync code links all your devices to the same data. Keep it private.
+    </p>
+    <div style="margin-bottom:18px">
+      <div style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:.06em;margin-bottom:6px">YOUR SYNC CODE</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div id="sync-code-display" style="flex:1;font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--accent);background:var(--s3);border:1px solid var(--bd2);border-radius:9px;padding:11px 14px;letter-spacing:.08em"></div>
+        <button onclick="copySyncCode()" style="padding:11px 14px;background:var(--s3);border:1px solid var(--bd2);border-radius:9px;color:var(--soft);font-size:12px;cursor:pointer;flex-shrink:0" id="sync-copy-btn">Copy</button>
+      </div>
+    </div>
+    <div style="margin-bottom:20px">
+      <div style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:.06em;margin-bottom:6px">USE A DIFFERENT CODE</div>
+      <div style="display:flex;gap:8px">
+        <input id="sync-code-inp" type="text" placeholder="Paste sync code…"
+          style="flex:1;padding:10px 12px;background:var(--s3);border:1px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:13px;font-family:'JetBrains Mono',monospace;outline:none">
+        <button onclick="applySyncCode()" style="padding:10px 16px;background:var(--accent);border:none;border-radius:9px;color:#1c1410;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0">Apply</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">Enter the code from your other device to share data between them.</div>
+    </div>
+    <div id="sync-status-row" style="font-size:12px;color:var(--muted);margin-bottom:16px;font-family:'JetBrains Mono',monospace"></div>
+    <button onclick="forceSyncNow()" style="width:100%;padding:12px;background:var(--s3);border:1px solid var(--bd2);border-radius:11px;color:var(--tx);font-size:14px;cursor:pointer;margin-bottom:10px">Sync now</button>
+    <button class="btn-cancel" style="width:100%" onclick="closeSyncModal()">Done</button>
+  </div>
+</div>
 
 <!-- AUTO-ASSIGN RULES MODAL -->
 <div class="overlay" id="modal-rules">
@@ -2943,6 +2977,132 @@ async function testPushNotif() {
     alert('Could not reach push server: ' + e.message);
   }
 }
+
+// ═══════════════════════════════════════
+// CLOUD SYNC
+// ═══════════════════════════════════════
+const SYNC_ID_KEY = 'sys_sync_id';
+
+function getSyncId(){
+  let id = localStorage.getItem(SYNC_ID_KEY);
+  if(!id){
+    // Generate a readable 4-word-style code using random hex groups
+    id = [uid(), uid()].join('-');
+    localStorage.setItem(SYNC_ID_KEY, id);
+  }
+  return id;
+}
+
+let _lastCloudPush = 0;
+let _syncPushTimer = null;
+
+// Push state to cloud — debounced so rapid saves don't flood the server
+function cloudPush(){
+  clearTimeout(_syncPushTimer);
+  _syncPushTimer = setTimeout(async ()=>{
+    if(!WORKER_URL) return;
+    try {
+      S._ts = Date.now();
+      await fetch(`${WORKER_URL}/sync?id=${encodeURIComponent(getSyncId())}`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(S),
+      });
+      _lastCloudPush = Date.now();
+      _updateSyncStatus();
+    } catch(e){} // fail silently — local save already done
+  }, 1500);
+}
+
+// Pull state from cloud on startup — use whichever is newer
+async function cloudPull(){
+  if(!WORKER_URL) return;
+  try {
+    const res = await fetch(`${WORKER_URL}/sync?id=${encodeURIComponent(getSyncId())}`);
+    if(!res.ok) return;
+    const remote = await res.json();
+    if(remote.found===false || !remote.template) return;
+    const localTs  = S._ts  || 0;
+    const remoteTs = remote._ts || 0;
+    if(remoteTs > localTs){
+      // Remote is newer — apply it
+      Object.assign(S, remote);
+      if(!S.skips) S.skips={};
+      if(!S.rules) S.rules=[];
+      if(!S.lists) S.lists=[];
+      save();
+      renderToday(); updateNotifyAllBtn();
+      const active = document.querySelector('.tab.on')?.id?.replace('tab-','');
+      if(active==='week')     renderWeek();
+      if(active==='calendar') renderCalendar();
+      if(active==='lists')    renderListsTab();
+    }
+    _lastCloudPush = Date.now();
+    _updateSyncStatus();
+  } catch(e){}
+}
+
+function _updateSyncStatus(){
+  const el = document.getElementById('sync-status-row');
+  if(!el) return;
+  const t = new Date(_lastCloudPush);
+  el.textContent = _lastCloudPush
+    ? `Last synced: ${pad(t.getHours())}:${pad(t.getMinutes())}`
+    : 'Not yet synced';
+}
+
+// ── Sync modal UI ──
+function openSyncModal(){
+  document.getElementById('sync-code-display').textContent = getSyncId();
+  _updateSyncStatus();
+  document.getElementById('modal-sync').classList.add('open');
+}
+function closeSyncModal(){
+  document.getElementById('modal-sync').classList.remove('open');
+}
+document.getElementById('modal-sync').addEventListener('click', e=>{
+  if(e.target===e.currentTarget) closeSyncModal();
+});
+
+function copySyncCode(){
+  navigator.clipboard?.writeText(getSyncId()).catch(()=>{});
+  const btn = document.getElementById('sync-copy-btn');
+  btn.textContent='Copied!'; setTimeout(()=>btn.textContent='Copy', 2000);
+}
+
+function applySyncCode(){
+  const inp = document.getElementById('sync-code-inp');
+  const code = inp.value.trim();
+  if(!code || code.length < 8){ inp.style.borderColor='var(--red)'; return; }
+  showConfirm('Switch to this sync code? Your local data will be replaced with the data linked to that code.', async ()=>{
+    localStorage.setItem(SYNC_ID_KEY, code);
+    inp.value='';
+    document.getElementById('sync-code-display').textContent = code;
+    await cloudPull();
+    save();
+  }, false);
+}
+
+async function forceSyncNow(){
+  const btn = document.querySelector('#modal-sync button[onclick="forceSyncNow()"]');
+  if(btn){ btn.textContent='Syncing…'; btn.disabled=true; }
+  S._ts = Date.now();
+  save();
+  await Promise.all([cloudPull(), cloudPush()]);
+  if(btn){ btn.textContent='Sync now'; btn.disabled=false; }
+}
+
+// Patch save() to also push to cloud
+const _origSave = save;
+save = () => { _origSave(); cloudPush(); };
+
+// Pull from cloud on startup
+cloudPull();
+
+// Re-pull when the app comes back to the foreground
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible') cloudPull();
+});
 </script>
 </body>
 </html>
