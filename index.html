@@ -57,6 +57,17 @@ body{
   font-family:'JetBrains Mono',monospace;font-size:12px;
   color:var(--soft);letter-spacing:0.04em;
 }
+.refresh-btn{
+  background:none;border:none;padding:6px;cursor:pointer;
+  color:var(--soft);display:flex;align-items:center;justify-content:center;
+  border-radius:8px;transition:color .15s;flex-shrink:0;
+}
+.refresh-btn:active{color:var(--accent)}
+@keyframes spin-once{
+  from{transform:rotate(0deg)}
+  to{transform:rotate(360deg)}
+}
+.refresh-btn.spinning svg{animation:spin-once .45s ease-out}
 
 /* ══ BOTTOM NAV ══ */
 .nav{
@@ -777,6 +788,12 @@ table.tt th, table.tt td{
 <header class="topbar">
   <div class="brand">Systematic</div>
   <div class="clock" id="clock"></div>
+  <button class="refresh-btn" id="refresh-btn" onclick="refreshCurrentTab()" title="Refresh">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+    </svg>
+  </button>
 </header>
 
 <!-- TODAY TAB -->
@@ -1288,6 +1305,17 @@ function switchTab(name){
   if(name==='week')     { weekOffset=0; renderWeek(); }
   if(name==='calendar') renderCalendar();
   if(name==='lists')    renderListsTab();
+}
+
+function refreshCurrentTab(){
+  const btn = document.getElementById('refresh-btn');
+  btn.classList.add('spinning');
+  btn.addEventListener('animationend', ()=>btn.classList.remove('spinning'), {once:true});
+  const active = document.querySelector('.tab.on')?.id?.replace('tab-','');
+  if(active==='today')    { renderToday(); updateNotifyAllBtn(); }
+  if(active==='week')     renderWeek();
+  if(active==='calendar') renderCalendar();
+  if(active==='lists')    renderListsTab();
 }
 
 // ═══════════════════════════════════════
