@@ -469,45 +469,37 @@ table.tt th, table.tt td{
 .bg-routine  {background:rgba(197,200,74,.22);color:#dde070}
 .bg-work     {background:rgba(122,184,64,.22);color:#a8d870}
 .bg-gym      {background:rgba(74,92,42,.45);color:#9aba70}
-.bg-muaythai {background:rgba(224,104,72,.25);color:#f0a890}
-.bg-football {background:rgba(245,216,78,.2);color:#f5d84e}
+.bg-sport    {background:rgba(224,104,72,.25);color:#f0a890}
 .bg-social   {background:rgba(112,184,160,.2);color:#90ccc0}
 .bg-travel   {background:rgba(128,148,184,.2);color:#aabcd0}
-.bg-personal {background:rgba(221,232,132,.2);color:#d8e880}
-.bg-sleep    {background:rgba(61,58,53,.7);color:#8a8680}
+.bg-project  {background:rgba(155,127,212,.2);color:#c4aef0}
 
 /* Left-border accent for today cards */
 .bl-routine  {border-left:3px solid #c5c84a !important}
 .bl-work     {border-left:3px solid #8aab3a !important}
 .bl-gym      {border-left:3px solid #5a8430 !important}
-.bl-muaythai {border-left:3px solid #e06848 !important}
-.bl-football {border-left:3px solid #f5d84e !important}
+.bl-sport    {border-left:3px solid #e06848 !important}
 .bl-social   {border-left:3px solid #70b8a0 !important}
 .bl-travel   {border-left:3px solid #8094b8 !important}
-.bl-personal {border-left:3px solid #dde884 !important}
-.bl-sleep    {border-left:3px solid #625e58 !important}
+.bl-project  {border-left:3px solid #9b7fd4 !important}
 
 /* Top bar colour strip */
 .bar-routine  {background:#c5c84a}
 .bar-work     {background:#8aab3a}
 .bar-gym      {background:#5a8430}
-.bar-muaythai {background:#e06848}
-.bar-football {background:#f5d84e}
+.bar-sport    {background:#e06848}
 .bar-social   {background:#70b8a0}
 .bar-travel   {background:#8094b8}
-.bar-personal {background:#dde884}
-.bar-sleep    {background:#625e58}
+.bar-project  {background:#9b7fd4}
 
 /* Dot colours for calendar */
 .dot-routine  {background:#c5c84a}
 .dot-work     {background:#8aab3a}
 .dot-gym      {background:#5a8430}
-.dot-muaythai {background:#e06848}
-.dot-football {background:#f5d84e}
+.dot-sport    {background:#e06848}
 .dot-social   {background:#70b8a0}
 .dot-travel   {background:#8094b8}
-.dot-personal {background:#dde884}
-.dot-sleep    {background:#625e58}
+.dot-project  {background:#9b7fd4}
 
 /* ════════════════════════════════════
    CALENDAR TAB
@@ -990,14 +982,12 @@ table.tt th, table.tt td{
         <label>Category</label>
         <select id="rule-cat-inp">
           <option value="routine">Routine</option>
-          <option value="work">Work</option>
           <option value="gym">Gym</option>
-          <option value="muaythai">Muay Thai</option>
-          <option value="football">Football</option>
+          <option value="sport">Sport</option>
           <option value="social">Social</option>
           <option value="travel">Travel</option>
-          <option value="personal">Personal</option>
-          <option value="sleep">Sleep</option>
+          <option value="project">Project</option>
+          <option value="work">Work</option>
         </select>
       </div>
       <div class="fld">
@@ -1034,14 +1024,12 @@ table.tt th, table.tt td{
       <label>Category</label>
       <select id="ev-cat">
         <option value="routine">Routine</option>
-        <option value="work">Work</option>
         <option value="gym">Gym</option>
-        <option value="muaythai">Muay Thai</option>
-        <option value="football">Football</option>
+        <option value="sport">Sport</option>
         <option value="social">Social</option>
         <option value="travel">Travel</option>
-        <option value="personal">Personal</option>
-        <option value="sleep">Sleep</option>
+        <option value="project">Project</option>
+        <option value="work">Work</option>
       </select>
     </div>
     <div class="fld">
@@ -1176,15 +1164,13 @@ const TOTAL_SLOTS = (TT_END - TT_START) * 2;
 
 // Default notification timing per category
 const CAT_BELL = {
-  routine:  { at:true,  before:10  },  // 10 min — morning/evening system
-  work:     { at:true,  before:60  },  // 1 hr — Signify
-  gym:      { at:true,  before:15  },  // 15 min
-  muaythai: { at:true,  before:15  },  // 15 min
-  football: { at:true,  before:30  },  // 30 min
-  social:   { at:true,  before:30  },  // 30 min
-  travel:   { at:true,  before:20  },  // 20 min
-  personal: { at:true,  before:10  },  // 10 min
-  sleep:    { at:false, before:0   },  // off
+  routine: { at:true,  before:10 },  // 10 min
+  work:    { at:true,  before:60 },  // 1 hr
+  gym:     { at:true,  before:15 },  // 15 min
+  sport:   { at:true,  before:30 },  // 30 min
+  social:  { at:true,  before:30 },  // 30 min
+  travel:  { at:true,  before:20 },  // 20 min
+  project: { at:true,  before:10 },  // 10 min
 };
 
 // Bell SVG — filled when on, outline when off
@@ -1214,6 +1200,15 @@ let S = (() => {
 })();
 if(!S.skips) S.skips = {};
 if(!S.rules) S.rules = [];
+
+// Migrate old category names to new set (one-time, harmless on repeat runs)
+const _CAT_MIGRATE = { muaythai:'sport', football:'sport', personal:'project', sleep:'routine' };
+const _migrateCat = c => _CAT_MIGRATE[c] || c;
+if(!S._catMigrated){
+  [...(S.template||[]), ...(S.oneoffs||[])].forEach(e=>{ e.cat=_migrateCat(e.cat); });
+  (S.rules||[]).forEach(r=>{ r.cat=_migrateCat(r.cat); });
+  S._catMigrated=true;
+}
 let save = () => {
   try {
     const str = JSON.stringify(S);
@@ -1251,15 +1246,14 @@ function addMins(t, m){
 }
 function inferCat(name){
   const n = name.toLowerCase();
-  if(/gym|run|workout|fitness/.test(n))        return 'gym';
-  if(/football|footy|soccer/.test(n))          return 'football';
-  if(/muay|thai|boxing/.test(n))               return 'muaythai';
-  if(/travel|commute|transit/.test(n))         return 'travel';
-  if(/sleep|bed/.test(n))                      return 'sleep';
-  if(/morning|evening|system|routine/.test(n)) return 'routine';
-  if(/work|office|signify|home day/.test(n))   return 'work';
-  if(/social|friend|party/.test(n))            return 'social';
-  return 'personal';
+  if(/gym|run|workout|fitness/.test(n))                              return 'gym';
+  if(/football|footy|soccer|sport|tennis|rugby|training|muay|thai|boxing|swim/.test(n)) return 'sport';
+  if(/travel|commute|transit|ibiza|trip|flight/.test(n))             return 'travel';
+  if(/morning|evening|system|routine|sleep|bed/.test(n))             return 'routine';
+  if(/work|office|signify|home day/.test(n))                         return 'work';
+  if(/social|friend|party|lunch|dinner|drinks/.test(n))              return 'social';
+  if(/project|build|design|code|develop|study|read/.test(n))         return 'project';
+  return 'project';
 }
 function timeMins(t){
   if(!t) return 0;
@@ -2465,7 +2459,7 @@ function closeManageLists(){
   updateSavedListSelect();
 }
 
-const _CAT_OPTIONS = ['routine','work','gym','muaythai','football','social','travel','personal','sleep']
+const _CAT_OPTIONS = ['routine','gym','sport','social','travel','project','work']
   .map(c=>`<option value="${c}">${c[0].toUpperCase()+c.slice(1)}</option>`).join('');
 
 function _listsCardHTML(list, prefix){
@@ -2693,10 +2687,10 @@ const INITIAL_TEMPLATE = [
   { title:'Gym',            cat:'gym',     days:[2],     startTime:'18:30', endTime:'20:30', bell:{at:true,before:15} },
   { title:'Gym',            cat:'gym',     days:[4],     startTime:'13:00', endTime:'14:00', bell:{at:true,before:15} },
   { title:'Gym',            cat:'gym',     days:[6],     startTime:'13:00', endTime:'14:30', bell:{at:true,before:15} },
-  // ── Football ──
-  { title:"Ben's Football",  cat:'football', days:[1], startTime:'18:00', endTime:'20:30', bell:{at:true,before:30} },
-  { title:'Merch Football',  cat:'football', days:[1], startTime:'20:30', endTime:'22:30', bell:{at:true,before:30} },
-  { title:'Omonia Training', cat:'football', days:[4], startTime:'17:30', endTime:'21:00', bell:{at:true,before:30} },
+  // ── Sport ──
+  { title:"Ben's Football",  cat:'sport', days:[1], startTime:'18:00', endTime:'20:30', bell:{at:true,before:30} },
+  { title:'Merch Football',  cat:'sport', days:[1], startTime:'20:30', endTime:'22:30', bell:{at:true,before:30} },
+  { title:'Omonia Training', cat:'sport', days:[4], startTime:'17:30', endTime:'21:00', bell:{at:true,before:30} },
   // ── Evening System ──
   { title:'Evening System',  cat:'routine', days:[0,2,3,6], startTime:'21:30', endTime:'23:00', bell:{at:true,before:0} },
 ];
