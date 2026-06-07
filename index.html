@@ -1096,9 +1096,11 @@ table.tt th, table.tt td{
 <div class="overlay" id="modal-lists">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-      <div class="sheet-title" style="margin:0">Saved Lists</div>
-      <button class="dp-add" onclick="startNewList()">+ New list</button>
+    <div class="sheet-title">Saved Lists</div>
+    <div class="lists-new-row" style="margin-bottom:14px">
+      <input class="lists-new-inp" id="modal-lists-new-inp" type="text" placeholder="New list name…"
+             onkeydown="if(event.key==='Enter')createListFromModal()">
+      <button class="lists-new-btn" onclick="createListFromModal()">Create</button>
     </div>
     <div id="lists-body"></div>
     <div style="margin-top:12px">
@@ -1111,6 +1113,22 @@ table.tt th, table.tt td{
 // ═══════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════
+// iOS PWA blocks alert/confirm/prompt — use this everywhere instead
+function showConfirm(msg, onOk, danger=true){
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:2000;display:flex;align-items:flex-end';
+  el.innerHTML = `<div style="background:var(--s1);border-radius:16px 16px 0 0;width:100%;padding:20px 16px 28px;border-top:1px solid var(--bd2)">
+    <div style="font-size:14px;line-height:1.5;margin-bottom:18px;color:var(--tx)">${msg}</div>
+    <div style="display:flex;gap:10px">
+      <button id="_cf-no"  style="flex:1;padding:13px;background:var(--s3);border:1px solid var(--bd2);border-radius:11px;color:var(--soft);font-size:14px;cursor:pointer;font-family:inherit">Cancel</button>
+      <button id="_cf-yes" style="flex:1;padding:13px;background:${danger?'var(--red)':'var(--accent)'};border:none;border-radius:11px;color:${danger?'#fff':'#1c1410'};font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">Confirm</button>
+    </div></div>`;
+  document.body.appendChild(el);
+  const close = () => document.body.removeChild(el);
+  el.querySelector('#_cf-no').onclick  = close;
+  el.querySelector('#_cf-yes').onclick = () => { close(); onOk(); };
+  el.onclick = e => { if(e.target===el) close(); };
+}
 const TT_START = 5;
 const TT_END   = 23;
 const SLOT_H   = 24;
@@ -1698,9 +1716,7 @@ function deleteOneOff(id){
 }
 
 function confirmDeleteOneOff(id){
-  if(!confirm('Delete this event?')) return;
-  deleteOneOff(id);
-  renderToday();
+  showConfirm('Delete this event?', ()=>{ deleteOneOff(id); renderToday(); });
 }
 
 // ═══════════════════════════════════════
@@ -1842,14 +1858,15 @@ function saveEvent(){
 
 function deleteEvent(){
   if(!_editId) return;
-  if(!confirm('Delete this event?')) return;
-  S.template = S.template.filter(e=>e.id!==_editId);
-  S.oneoffs  = S.oneoffs.filter(e=>e.id!==_editId);
-  save(); closeModal();
-  const active=document.querySelector('.tab.on')?.id?.replace('tab-','');
-  if(active==='today')    renderToday();
-  if(active==='week')     renderWeek();
-  if(active==='calendar') renderCalendar();
+  showConfirm('Delete this event?', ()=>{
+    S.template = S.template.filter(e=>e.id!==_editId);
+    S.oneoffs  = S.oneoffs.filter(e=>e.id!==_editId);
+    save(); closeModal();
+    const active=document.querySelector('.tab.on')?.id?.replace('tab-','');
+    if(active==='today')    renderToday();
+    if(active==='week')     renderWeek();
+    if(active==='calendar') renderCalendar();
+  });
 }
 
 // ═══════════════════════════════════════
@@ -1940,12 +1957,10 @@ function toggleNotifyAll(){
 // WEEK TEMPLATE MANAGEMENT
 // ═══════════════════════════════════════
 function clearTemplate(){
-  if(!confirm('Clear the entire weekly template? This cannot be undone (export a backup first if needed).')) return;
-  S.template = [];
-  save();
-  renderWeek();
-  scheduleNotifications();
-  syncPushSchedule();
+  showConfirm('Clear the entire weekly template? This cannot be undone.', ()=>{
+    S.template = [];
+    save(); renderWeek(); scheduleNotifications(); syncPushSchedule();
+  });
 }
 
 // ═══════════════════════════════════════
@@ -2040,11 +2055,12 @@ function importTimetableCSV(e){
       });
 
       if(!events.length) throw new Error('No events found in the CSV');
-      if(!confirm(`Import ${events.length} events? This will replace your current weekly template.`)) return;
-      S.template = events;
-      save(); renderWeek(); scheduleNotifications(); syncPushSchedule();
+      showConfirm(`Import ${events.length} events? This will replace your current weekly template.`, ()=>{
+        S.template = events;
+        save(); renderWeek(); scheduleNotifications(); syncPushSchedule();
+      }, false);
     } catch(err){
-      alert('Could not import CSV: ' + err.message);
+      showConfirm(`Could not import CSV: ${err.message}`, ()=>{}, false);
     }
   };
   reader.readAsText(file);
@@ -2085,14 +2101,16 @@ function importData(e){
     try {
       const data = JSON.parse(ev.target.result);
       if(!data.template) throw new Error('Invalid backup');
-      if(!confirm('This will replace all your current data. Continue?')) return;
-      S = data;
-      save();
-      renderToday();
-      updateNotifyAllBtn();
-      alert('Imported successfully.');
+      showConfirm('This will replace all your current data.', ()=>{
+        S = data;
+        if(!S.rules) S.rules = [];
+        if(!S.skips) S.skips = {};
+        save();
+        renderToday();
+        updateNotifyAllBtn();
+      }, false);
     } catch(err) {
-      alert('Could not read backup file.');
+      showConfirm('Could not read backup file.', ()=>{}, false);
     }
   };
   reader.readAsText(file);
@@ -2264,22 +2282,42 @@ function loadSavedList(){
 }
 
 function saveCurrentAsList(){
-  const name = prompt('Name this list:','');
-  if(!name?.trim()) return;
-  const existing = S.lists.find(l=>l.name===name.trim());
-  if(existing){
-    if(!confirm(`Replace existing list "${name}"?`)) return;
-    existing.items = _cl.map(i=>({...i}));
-  } else {
-    S.lists.push({id:uid(), name:name.trim(), items:_cl.map(i=>({...i}))});
-  }
-  save(); updateSavedListSelect();
+  const btn = document.querySelector('.save-list-btn');
+  if(btn?._saving) return;
+  // Swap button for an inline input row — no prompt() needed
+  const orig = btn.textContent;
+  btn._saving = true;
+  btn.innerHTML = '';
+  const inp = document.createElement('input');
+  inp.placeholder = 'List name…';
+  inp.style.cssText = 'flex:1;padding:7px 10px;background:var(--s3);border:1px solid var(--bd2);border-radius:7px;color:var(--tx);font-size:13px;outline:none;min-width:0';
+  const ok = document.createElement('button');
+  ok.textContent = 'Save';
+  ok.style.cssText = 'padding:7px 14px;background:var(--accent);border:none;border-radius:7px;color:#1c1410;font-weight:600;cursor:pointer;font-size:13px;flex-shrink:0';
+  btn.style.cssText = 'display:flex;gap:7px;width:100%';
+  const commit = () => {
+    const name = inp.value.trim();
+    if(name){
+      const existing = S.lists.find(l=>l.name.toLowerCase()===name.toLowerCase());
+      if(existing){ existing.items = _cl.map(i=>({...i})); }
+      else { S.lists.push({id:uid(), name, items:_cl.map(i=>({...i}))}); }
+      save(); updateSavedListSelect(); _reRenderLists();
+    }
+    btn.style.cssText = ''; btn.innerHTML = orig; btn._saving = false;
+  };
+  const cancel = () => { btn.style.cssText = ''; btn.innerHTML = orig; btn._saving = false; };
+  ok.onclick = commit;
+  inp.onkeydown = e => { if(e.key==='Enter') commit(); if(e.key==='Escape') cancel(); };
+  btn.appendChild(inp); btn.appendChild(ok);
+  setTimeout(()=>inp.focus(), 0);
 }
 
 function deleteList(id){
-  if(!confirm('Delete this list?')) return;
-  S.lists = S.lists.filter(l=>l.id!==id);
-  save(); _reRenderLists();
+  showConfirm('Delete this list?', ()=>{
+    S.lists = S.lists.filter(l=>l.id!==id);
+    S.rules = S.rules.filter(r=>r.listId!==id);
+    save(); _reRenderLists();
+  });
 }
 
 // ── Manage Lists modal ──
@@ -2451,12 +2489,15 @@ function createListFromTab(){
   inp.value='';
 }
 
-function startNewList(){
-  const name = prompt('New list name:','');
-  if(!name?.trim()) return;
-  S.lists.push({id:uid(), name:name.trim(), items:[]});
+function createListFromModal(){
+  const inp = document.getElementById('modal-lists-new-inp');
+  const name = inp?.value.trim();
+  if(!name) return;
+  S.lists.push({id:uid(), name, items:[]});
   save(); _reRenderLists();
+  inp.value = '';
 }
+function startNewList(){ createListFromModal(); } // compat
 
 document.getElementById('modal-lists').addEventListener('click', e=>{
   if(e.target===e.currentTarget) closeManageLists();
