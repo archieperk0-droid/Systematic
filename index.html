@@ -729,6 +729,10 @@ table.tt th, table.tt td{
   display:flex;align-items:center;gap:8px;padding:5px 0;
   border-bottom:1px solid var(--bd);
 }
+.ml-item-grip{cursor:grab;color:var(--muted);opacity:.4;flex-shrink:0;display:flex;align-items:center;transition:opacity .15s}
+.ml-item-grip:hover{opacity:.9}
+.ml-item-row.ml-item-drag-over{outline:2px solid var(--accent);border-radius:4px;outline-offset:-1px}
+.ml-item-row.ml-item-dragging{opacity:.35}
 .ml-item-row:last-child{border-bottom:none}
 .ml-item-input{
   flex:1;background:none;border:none;color:var(--tx);
@@ -796,6 +800,33 @@ table.tt th, table.tt td{
   padding:12px 14px;background:var(--s3);border:1px solid var(--bd2);
   border-radius:9px;color:var(--soft);font-size:13px;cursor:pointer;
 }
+/* ── Daily tasks ──────────────────────────────────────── */
+#today-tasks{padding:0 0 24px}
+.daily-tasks-section{border-top:1px solid var(--bd);padding-top:14px}
+.daily-tasks-hdr{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.daily-task-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--bd1)}
+.daily-task-row.done .daily-task-text{text-decoration:line-through;opacity:.4}
+.daily-task-chk{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--bd2);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .15s,border-color .15s}
+.daily-task-row.done .daily-task-chk{background:var(--accent);border-color:var(--accent)}
+.daily-task-text{flex:1;font-size:14px;line-height:1.4;color:var(--tx)}
+.daily-task-del{background:none;border:none;color:var(--muted);cursor:pointer;padding:2px;display:flex;align-items:center;opacity:0;transition:opacity .15s;flex-shrink:0}
+.daily-task-row:hover .daily-task-del{opacity:1}
+.daily-task-add-row{display:flex;gap:8px;padding-top:10px}
+.daily-task-inp{flex:1;padding:8px 12px;background:var(--s3);border:1px solid var(--bd2);border-radius:8px;color:var(--tx);font-size:13px;outline:none;font-family:'Inter',sans-serif}
+.daily-task-inp:focus{border-color:var(--accent)}
+.daily-task-add-btn{padding:8px 14px;background:var(--s3);border:1px solid var(--bd2);border-radius:8px;color:var(--soft);font-weight:600;cursor:pointer;font-size:13px;white-space:nowrap;transition:background .12s,color .12s}
+.daily-task-add-btn:hover{background:var(--accent);color:#1c1410;border-color:var(--accent)}
+/* ── Timetable drag-and-drop ──────────────────────────── */
+.tt-ev.dragging{opacity:.35;pointer-events:none}
+.tt-ev[draggable=true]{cursor:grab}
+.tt-ev[draggable=true]:active{cursor:grabbing}
+.tt-empty.drag-over{background:rgba(255,180,0,.12)!important;outline:2px dashed var(--accent);outline-offset:-2px}
+/* ── System reorder ───────────────────────────────────── */
+.ml-grip{cursor:grab;color:var(--muted);display:flex;align-items:center;flex-shrink:0;opacity:.5;transition:opacity .15s}
+.ml-grip:hover{opacity:1}
+.ml-card-head{user-select:none}
+.ml-card.ml-dragging{opacity:.35}
+.ml-card.ml-drag-over{outline:2px solid var(--accent);border-radius:10px;outline-offset:-1px}
 </style>
 </head>
 <body>
@@ -869,6 +900,7 @@ table.tt th, table.tt td{
     </div>
   </div>
   <div id="today-cards"></div>
+  <div id="today-tasks"></div>
 </section>
 
 <!-- WEEK TAB -->
@@ -886,6 +918,7 @@ table.tt th, table.tt td{
       ↑ CSV
       <input type="file" accept=".csv,.txt" style="display:none" onchange="importTimetableCSV(event)">
     </label>
+    <button class="wbtn" title="Download blank CSV template for this week" onclick="downloadCSVTemplate()">↓ Template</button>
     <button class="wbtn accent" onclick="openAddModal(null,null)">+ Add</button>
   </div>
   <div class="tt-scroll" id="tt-scroll">
@@ -955,19 +988,19 @@ table.tt th, table.tt td{
       <line x1="3" y1="12" x2="3.01" y2="12" stroke-linecap="round" stroke-width="3"/>
       <line x1="3" y1="18" x2="3.01" y2="18" stroke-linecap="round" stroke-width="3"/>
     </svg>
-    <label>Lists</label>
+    <label>Systems</label>
   </button>
 </nav>
 
-<!-- LISTS TAB -->
+<!-- SYSTEMS TAB -->
 <section class="tab" id="tab-lists">
   <div class="lists-tab-header">
     <div class="lists-tab-title">
-      <span>Lists</span>
+      <span>Systems</span>
       <button class="lists-save-btn" id="lists-save-btn" onclick="saveListsExplicit()">Save</button>
     </div>
     <div class="lists-new-row">
-      <input class="lists-new-inp" id="lists-new-inp" type="text" placeholder="New list name…"
+      <input class="lists-new-inp" id="lists-new-inp" type="text" placeholder="New system name…"
              onkeydown="if(event.key==='Enter')createListFromTab()">
       <button class="lists-new-btn" onclick="createListFromTab()">Create</button>
     </div>
@@ -1169,13 +1202,13 @@ table.tt th, table.tt td{
   </div>
 </div>
 
-<!-- MANAGE LISTS MODAL -->
+<!-- MANAGE SYSTEMS MODAL -->
 <div class="overlay" id="modal-lists">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <div class="sheet-title">Saved Lists</div>
+    <div class="sheet-title">Systems</div>
     <div class="lists-new-row" style="margin-bottom:14px">
-      <input class="lists-new-inp" id="modal-lists-new-inp" type="text" placeholder="New list name…"
+      <input class="lists-new-inp" id="modal-lists-new-inp" type="text" placeholder="New system name…"
              onkeydown="if(event.key==='Enter')createListFromModal()">
       <button class="lists-new-btn" onclick="createListFromModal()">Create</button>
     </div>
@@ -1249,8 +1282,9 @@ let S = (() => {
   try { const r=localStorage.getItem(KEY); if(r) return JSON.parse(r); } catch(e){}
   return { v:2, template:[], oneoffs:[], checks:{}, skips:{}, lists:[], rules:[] };
 })();
-if(!S.skips) S.skips = {};
-if(!S.rules) S.rules = [];
+if(!S.skips)      S.skips      = {};
+if(!S.rules)      S.rules      = [];
+if(!S.dailyTasks) S.dailyTasks = {};
 
 // Migrate old category names to new set (one-time, harmless on repeat runs)
 const _CAT_MIGRATE = { muaythai:'sport', football:'sport', personal:'project', sleep:'routine' };
@@ -1434,6 +1468,7 @@ function renderToday(){
   const container = document.getElementById('today-cards');
   if(!all.length){
     container.innerHTML = `<div class="today-empty"><strong>Clear day</strong>No events on your template for today. Add recurring events in the Week tab, or one-off events in Calendar.</div>`;
+    renderDailyTasks(tStr);
     return;
   }
 
@@ -1543,6 +1578,58 @@ function renderToday(){
 
     container.appendChild(card);
   });
+
+  renderDailyTasks(tStr);
+}
+
+// ═══════════════════════════════════════
+// DAILY TASKS
+// ═══════════════════════════════════════
+function renderDailyTasks(dateStr){
+  const wrap = document.getElementById('today-tasks');
+  if(!wrap) return;
+  const tasks = S.dailyTasks[dateStr] || [];
+  const chkSvg = `<svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><polyline points="2,6 5,9 10,3"/></svg>`;
+  const delSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+  const rows = tasks.map(t=>`
+    <div class="daily-task-row${t.done?' done':''}" >
+      <div class="daily-task-chk" onclick="toggleDailyTask('${dateStr}','${t.id}')">${chkSvg}</div>
+      <div class="daily-task-text">${t.text.replace(/</g,'&lt;')}</div>
+      <button class="daily-task-del" onclick="deleteDailyTask('${dateStr}','${t.id}')">${delSvg}</button>
+    </div>`).join('');
+  wrap.innerHTML = `<div class="daily-tasks-section">
+    <div class="daily-tasks-hdr">Today's tasks</div>
+    ${rows}
+    <div class="daily-task-add-row">
+      <input class="daily-task-inp" id="daily-task-inp" type="text" placeholder="Add a task…"
+             onkeydown="if(event.key==='Enter')addDailyTask('${dateStr}')">
+      <button class="daily-task-add-btn" onclick="addDailyTask('${dateStr}')">Add</button>
+    </div>
+  </div>`;
+}
+
+function addDailyTask(dateStr){
+  const inp = document.getElementById('daily-task-inp');
+  const text = (inp?.value||'').trim();
+  if(!text) return;
+  if(!S.dailyTasks[dateStr]) S.dailyTasks[dateStr] = [];
+  S.dailyTasks[dateStr].push({id:uid(), text, done:false});
+  save();
+  renderDailyTasks(dateStr);
+  setTimeout(()=>document.getElementById('daily-task-inp')?.focus(), 0);
+}
+
+function toggleDailyTask(dateStr, taskId){
+  const t = (S.dailyTasks[dateStr]||[]).find(t=>t.id===taskId);
+  if(!t) return;
+  t.done = !t.done;
+  save(); renderDailyTasks(dateStr);
+}
+
+function deleteDailyTask(dateStr, taskId){
+  if(!S.dailyTasks[dateStr]) return;
+  S.dailyTasks[dateStr] = S.dailyTasks[dateStr].filter(t=>t.id!==taskId);
+  save(); renderDailyTasks(dateStr);
 }
 
 function toggleBellFromToday(evId){
@@ -1647,10 +1734,32 @@ function renderWeek(){
           ${locMark}${clCount}${bellMark}
         </div>`;
         td.addEventListener('click', ()=>openEditModal(ev.id));
+        if(_ttDragEnabled){
+          td.draggable = true;
+          td.addEventListener('dragstart', e=>{
+            _dragEvId = ev.id; _dragSrcDi = di; _dragSrcSi = si;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', ev.id);
+            setTimeout(()=>td.classList.add('dragging'), 0);
+          });
+          td.addEventListener('dragend', ()=>{
+            td.classList.remove('dragging');
+            document.querySelectorAll('.tt-empty.drag-over').forEach(el=>el.classList.remove('drag-over'));
+          });
+        }
       } else {
         td.className = 'tt-empty' + (di===todayDow?' today-col':'') + (isHour?' hr':'');
         const timeStr = slotToTime(si);
         td.addEventListener('click', ()=>openAddModal(di, timeStr));
+        if(_ttDragEnabled){
+          td.dataset.di = di; td.dataset.si = si;
+          td.addEventListener('dragover', e=>{ e.preventDefault(); td.classList.add('drag-over'); });
+          td.addEventListener('dragleave', ()=>td.classList.remove('drag-over'));
+          td.addEventListener('drop', e=>{
+            e.preventDefault(); td.classList.remove('drag-over');
+            if(_dragEvId !== null) _handleTimetableDrop(_dragEvId, _dragSrcDi, di, si);
+          });
+        }
       }
       tr.appendChild(td);
     }
@@ -1683,6 +1792,49 @@ function drawNowLine(){
 
   // Scroll to now
   scroll.scrollTop = topPx - 80;
+}
+
+// ═══════════════════════════════════════
+// TIMETABLE DRAG-AND-DROP (desktop/tablet only)
+// ═══════════════════════════════════════
+const _ttDragEnabled = window.matchMedia('(pointer: fine)').matches;
+let _dragEvId = null, _dragSrcDi = null, _dragSrcSi = null;
+
+function _handleTimetableDrop(evid, srcDi, newDi, newSi){
+  const now = new Date();
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - getDow(now) + weekOffset*7);
+  mon.setHours(0,0,0,0);
+  const weekDays = Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d;});
+  const newDateStr   = isoDate(weekDays[newDi]);
+  const newStartTime = slotToTime(newSi);
+
+  const templateEv = S.template.find(e=>e.id===evid);
+  const oneoffEv   = S.oneoffs.find(e=>e.id===evid);
+
+  if(templateEv){
+    const srcDateStr = isoDate(weekDays[srcDi]);
+    // Skip original template occurrence on that date
+    if(!S.skips[srcDateStr]) S.skips[srcDateStr] = [];
+    if(!S.skips[srcDateStr].includes(templateEv.id)) S.skips[srcDateStr].push(templateEv.id);
+    // Create one-off at new position, preserving duration
+    const dur = templateEv.endTime ? Math.max(30, timeMins(templateEv.endTime)-timeMins(templateEv.startTime)) : 60;
+    S.oneoffs.push({
+      id:uid(), title:templateEv.title, cat:templateEv.cat,
+      date:newDateStr, startTime:newStartTime, endTime:addMins(newStartTime, dur),
+      bell:{...templateEv.bell},
+      checklist:(templateEv.checklist||[]).map(i=>({...i, id:uid()})),
+      listId:templateEv.listId||null, location:templateEv.location||null,
+    });
+  } else if(oneoffEv){
+    const dur = oneoffEv.endTime ? Math.max(30, timeMins(oneoffEv.endTime)-timeMins(oneoffEv.startTime)) : 60;
+    oneoffEv.date      = newDateStr;
+    oneoffEv.startTime = newStartTime;
+    oneoffEv.endTime   = addMins(newStartTime, dur);
+  }
+
+  _dragEvId = null; _dragSrcDi = null; _dragSrcSi = null;
+  save(); renderWeek();
 }
 
 // ═══════════════════════════════════════
@@ -2110,6 +2262,42 @@ function clearWeek(){
 // ═══════════════════════════════════════
 // CSV TIMETABLE IMPORT  (grid format)
 // ═══════════════════════════════════════
+// Normalise time strings from Excel/Numbers (handles HH:MM, HH:MM:SS, H:MM AM/PM)
+function _parseTimeStr(raw){
+  const s = (raw||'').trim();
+  const m = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(am|pm)?$/i);
+  if(!m) return null;
+  let h = parseInt(m[1]), min = parseInt(m[2]);
+  const ap = (m[3]||'').toLowerCase();
+  if(ap==='pm' && h!==12) h += 12;
+  if(ap==='am' && h===12) h = 0;
+  return `${pad(h)}:${pad(min)}`;
+}
+
+// Generate a blank CSV template for the viewed week (↓ Template button)
+function downloadCSVTemplate(){
+  const now = new Date();
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - getDow(now) + weekOffset*7);
+  mon.setHours(0,0,0,0);
+  const days = Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d;});
+  const dFmt = d=>`${pad(d.getDate())}/${pad(d.getMonth()+1)}/${String(d.getFullYear()).slice(2)}`;
+  const header  = `,,${DSHORT.join(',')}\n`;
+  const dateRow = `,,${days.map(dFmt).join(',')}\n`;
+  let rows = '';
+  for(let h=5;h<24;h++){
+    for(let half=0;half<2;half++){
+      const t=`${pad(h)}:${half===0?'00':'30'}`;
+      rows += `,${t},,,,,,,\n`;
+    }
+  }
+  const csv = header + dateRow + rows;
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `systematic-template-${dFmt(days[0]).replace(/\//g,'-')}.csv`;
+  a.click();
+}
+
 function _parseCSVRow(line){
   const result = [];
   let cur = '', inQ = false;
@@ -2168,12 +2356,12 @@ function importTimetableCSV(e){
       if(Object.keys(dayDates).length < 5)
         throw new Error('No date row found in CSV (expected DD/MM/YY below the day names)');
 
-      // 3. Find time column (HH:MM values)
+      // 3. Find time column (handles HH:MM, HH:MM:SS, H:MM AM/PM from Excel/Numbers)
       let timeColIdx = -1;
       for(let i=headerIdx+1; i<rawLines.length; i++){
         const cols = _parseCSVRow(rawLines[i]);
         for(let ci=0; ci<cols.length; ci++){
-          if(/^\d{1,2}:\d{2}$/.test(cols[ci].trim())){ timeColIdx=ci; break; }
+          if(_parseTimeStr(cols[ci])){ timeColIdx=ci; break; }
         }
         if(timeColIdx>=0) break;
       }
@@ -2183,8 +2371,8 @@ function importTimetableCSV(e){
       const slotsByDay = Array.from({length:7}, ()=>[]); // [{name, time}]
       for(let i=headerIdx+1; i<rawLines.length; i++){
         const cols = _parseCSVRow(rawLines[i]);
-        const t = (cols[timeColIdx]||'').trim();
-        if(!/^\d{1,2}:\d{2}$/.test(t)) continue;
+        const t = _parseTimeStr(cols[timeColIdx]);
+        if(!t) continue;
         for(let di=0; di<7; di++){
           const ci = dayColMap[di];
           if(ci===undefined || ci>=cols.length) continue;
@@ -2528,9 +2716,13 @@ function _listsCardHTML(list, prefix){
       <button class="ml-auto-rule-del" onclick="deleteRuleFromList(${r._i},'${prefix}')">×</button>
     </div>`).join('');
 
+  const gripSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="8" x2="19" y2="8"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="16" x2="19" y2="16"/></svg>`;
+
   return `
-    <div class="ml-card" id="${prefix}-${list.id}">
+    <div class="ml-card" id="${prefix}-${list.id}" data-listid="${list.id}">
       <div class="ml-card-head" onclick="toggleMLCard('${prefix}-${list.id}')">
+        <span class="ml-grip" draggable="true" onclick="event.stopPropagation()"
+              data-grip="${prefix}" data-listid="${list.id}">${gripSvg}</span>
         <input class="ml-card-name" type="text" value="${list.name.replace(/"/g,'&quot;')}"
                onclick="event.stopPropagation()"
                onblur="renameList('${list.id}',this.value)"
@@ -2538,11 +2730,14 @@ function _listsCardHTML(list, prefix){
         <span class="ml-chevron">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6,9 12,15 18,9"/></svg>
         </span>
-        <button class="ml-card-del" onclick="event.stopPropagation();deleteList('${list.id}')" title="Delete list">${trashSvg}</button>
+        <button class="ml-card-del" onclick="event.stopPropagation();deleteList('${list.id}')" title="Delete system">${trashSvg}</button>
       </div>
       <div class="ml-items">
         ${list.items.map(item => `
-          <div class="ml-item-row">
+          <div class="ml-item-row" data-itemid="${item.id}" data-listid="${list.id}">
+            <span class="ml-item-grip" draggable="true" onclick="event.stopPropagation()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+            </span>
             <input class="ml-item-input" type="text" value="${item.text.replace(/"/g,'&quot;')}"
                    onblur="updateListItem('${list.id}','${item.id}',this.value)"
                    onkeydown="if(event.key==='Enter')this.blur()">
@@ -2573,6 +2768,94 @@ function _reRenderLists(){
   renderListsModal();
   renderListsTab();
   updateSavedListSelect();
+  initListDragSort('mlc', document.getElementById('lists-body'));
+  initListDragSort('mlt', document.getElementById('lists-tab-body'));
+}
+
+function initListDragSort(prefix, container){
+  if(!container) return;
+
+  // ── Card-level reorder (drag whole system up/down) ──
+  let dragListId = null;
+  container.querySelectorAll('[data-grip]').forEach(grip=>{
+    const card = grip.closest('.ml-card');
+    grip.addEventListener('dragstart', e=>{
+      dragListId = grip.dataset.listid;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', dragListId);
+      setTimeout(()=>card?.classList.add('ml-dragging'), 0);
+    });
+    grip.addEventListener('dragend', ()=>{
+      card?.classList.remove('ml-dragging');
+      container.querySelectorAll('.ml-card.ml-drag-over').forEach(c=>c.classList.remove('ml-drag-over'));
+    });
+  });
+  container.querySelectorAll('.ml-card').forEach(card=>{
+    card.addEventListener('dragover', e=>{
+      // Only handle card-level drag when a card (not item) is being dragged
+      if(!dragListId) return;
+      e.preventDefault();
+      if(card.dataset.listid !== dragListId) card.classList.add('ml-drag-over');
+    });
+    card.addEventListener('dragleave', ()=>card.classList.remove('ml-drag-over'));
+    card.addEventListener('drop', e=>{
+      if(!dragListId) return;
+      e.preventDefault();
+      card.classList.remove('ml-drag-over');
+      const targetId = card.dataset.listid;
+      if(dragListId===targetId) return;
+      const srcIdx = S.lists.findIndex(l=>l.id===dragListId);
+      const tgtIdx = S.lists.findIndex(l=>l.id===targetId);
+      if(srcIdx<0||tgtIdx<0) return;
+      const [removed] = S.lists.splice(srcIdx, 1);
+      S.lists.splice(tgtIdx, 0, removed);
+      dragListId = null;
+      save(); _reRenderLists();
+    });
+  });
+
+  // ── Item-level reorder (drag items within a system) ──
+  let dragItemId = null, dragItemListId = null;
+  container.querySelectorAll('.ml-item-grip').forEach(grip=>{
+    const row = grip.closest('.ml-item-row');
+    grip.addEventListener('dragstart', e=>{
+      dragItemId     = row.dataset.itemid;
+      dragItemListId = row.dataset.listid;
+      dragListId     = null; // prevent card-level handler firing
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', dragItemId);
+      setTimeout(()=>row.classList.add('ml-item-dragging'), 0);
+    });
+    grip.addEventListener('dragend', ()=>{
+      row.classList.remove('ml-item-dragging');
+      container.querySelectorAll('.ml-item-row.ml-item-drag-over').forEach(r=>r.classList.remove('ml-item-drag-over'));
+      dragItemId = null; dragItemListId = null;
+    });
+  });
+  container.querySelectorAll('.ml-item-row').forEach(row=>{
+    row.addEventListener('dragover', e=>{
+      if(!dragItemId) return;
+      e.preventDefault(); e.stopPropagation();
+      if(row.dataset.itemid !== dragItemId) row.classList.add('ml-item-drag-over');
+    });
+    row.addEventListener('dragleave', ()=>row.classList.remove('ml-item-drag-over'));
+    row.addEventListener('drop', e=>{
+      if(!dragItemId) return;
+      e.preventDefault(); e.stopPropagation();
+      row.classList.remove('ml-item-drag-over');
+      const targetItemId = row.dataset.itemid;
+      if(dragItemId===targetItemId) return;
+      const list = S.lists.find(l=>l.id===dragItemListId);
+      if(!list) return;
+      const srcIdx = list.items.findIndex(i=>i.id===dragItemId);
+      const tgtIdx = list.items.findIndex(i=>i.id===targetItemId);
+      if(srcIdx<0||tgtIdx<0) return;
+      const [removed] = list.items.splice(srcIdx, 1);
+      list.items.splice(tgtIdx, 0, removed);
+      dragItemId = null; dragItemListId = null;
+      save(); _reRenderLists();
+    });
+  });
 }
 
 function renderListsModal(){
@@ -2580,7 +2863,8 @@ function renderListsModal(){
   if(!body) return;
   body.innerHTML = S.lists.length
     ? S.lists.map(l=>_listsCardHTML(l,'mlc')).join('')
-    : `<div class="ml-empty">No saved lists yet.</div>`;
+    : `<div class="ml-empty">No systems yet.</div>`;
+  initListDragSort('mlc', body);
 }
 
 function renderListsTab(){
@@ -2588,7 +2872,8 @@ function renderListsTab(){
   if(!body) return;
   body.innerHTML = S.lists.length
     ? S.lists.map(l=>_listsCardHTML(l,'mlt')).join('')
-    : `<div class="lists-tab-empty">No lists yet.<br>Type a name above and tap Create.</div>`;
+    : `<div class="lists-tab-empty">No systems yet.<br>Type a name above and tap Create.</div>`;
+  initListDragSort('mlt', body);
 }
 
 function toggleMLCard(cardId){
@@ -3024,15 +3309,22 @@ async function cloudPull(){
     const res = await fetch(`${WORKER_URL}/sync?id=${encodeURIComponent(getSyncId())}`);
     if(!res.ok) return;
     const remote = await res.json();
-    if(remote.found===false || !remote.template) return;
+    // Bail if the cloud has nothing or returned an error shape
+    if(!remote || remote.found===false || (!remote._ts && !remote.template && !remote.oneoffs && !remote.lists)) return;
     const localTs  = S._ts  || 0;
     const remoteTs = remote._ts || 0;
     if(remoteTs > localTs){
-      // Remote is newer — apply it
+      // Full state replacement — wipe every local key so nothing stale survives
+      Object.keys(S).forEach(k => delete S[k]);
       Object.assign(S, remote);
-      if(!S.skips) S.skips={};
-      if(!S.rules) S.rules=[];
-      if(!S.lists) S.lists=[];
+      // Safety defaults in case remote was written by an older version
+      if(!S.template)    S.template    = [];
+      if(!S.oneoffs)     S.oneoffs     = [];
+      if(!S.checks)      S.checks      = {};
+      if(!S.skips)       S.skips       = {};
+      if(!S.lists)       S.lists       = [];
+      if(!S.rules)       S.rules       = [];
+      if(!S.dailyTasks)  S.dailyTasks  = {};
       save();
       renderToday(); updateNotifyAllBtn();
       const active = document.querySelector('.tab.on')?.id?.replace('tab-','');
@@ -3059,6 +3351,15 @@ function openSyncModal(){
   document.getElementById('sync-code-display').textContent = getSyncId();
   _updateSyncStatus();
   document.getElementById('modal-sync').classList.add('open');
+  // Push current state immediately so the cloud is up-to-date before the other device links
+  if(WORKER_URL){
+    S._ts = Date.now();
+    localStorage.setItem(KEY, JSON.stringify(S));
+    const body = JSON.stringify(S);
+    fetch(`${WORKER_URL}/sync?id=${encodeURIComponent(getSyncId())}`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body,
+    }).then(()=>{ _lastCloudPush = Date.now(); _updateSyncStatus(); }).catch(()=>{});
+  }
 }
 function closeSyncModal(){
   document.getElementById('modal-sync').classList.remove('open');
@@ -3082,7 +3383,7 @@ function applySyncCode(){
     inp.value='';
     document.getElementById('sync-code-display').textContent = code;
     await cloudPull();
-    save();
+    _updateSyncStatus();
   }, false);
 }
 
