@@ -1240,7 +1240,7 @@ function showConfirm(msg, onOk, danger=true){
   el.onclick = e => { if(e.target===el) close(); };
 }
 const TT_START = 5;
-const TT_END   = 23;
+const TT_END   = 24;   // midnight — display up to 00:00
 const SLOT_H   = 24;
 const TOTAL_SLOTS = (TT_END - TT_START) * 2;
 
@@ -1346,8 +1346,9 @@ function timeMins(t){
   return h*60+m;
 }
 function timeToSlot(t){
-  const mins = timeMins(t) - TT_START*60;
-  return Math.max(0, Math.floor(mins/30));
+  let mins = timeMins(t) - TT_START*60;
+  if(mins < 0) mins += 24*60; // 00:xx = midnight, treat as 24:xx
+  return Math.min(TOTAL_SLOTS, Math.max(0, Math.floor(mins/30)));
 }
 function slotToTime(si){
   const total = si*30 + TT_START*60;
@@ -1714,7 +1715,7 @@ function renderWeek(){
     // time cell
     const tc = document.createElement('td');
     tc.className = 'tt-tc' + (isHour?' hr':'');
-    tc.textContent = isHour ? pad(h) : '';
+    tc.textContent = isHour ? pad(h >= 24 ? h - 24 : h) : '';
     tr.appendChild(tc);
 
     for(let di=0; di<7; di++){
@@ -2262,6 +2263,29 @@ function clearWeek(){
 // ═══════════════════════════════════════
 // CSV TIMETABLE IMPORT  (grid format)
 // ═══════════════════════════════════════
+// Extract start/end times embedded in event names like "Travel - 8:30am - 9:30am"
+// Returns { title, startTime, endTime } — startTime/endTime are "HH:MM" or null
+function _parseEventNameAndTime(raw, rowTime){
+  const s = raw.trim();
+  const timeRe = /(\d{1,2}:\d{2}\s*(?:am|pm)?)/i;
+  // Two times: "... - H:MMam - H:MMpm" or "... H:MMam- H:MMpm"
+  const two = s.match(/\s*[-–]?\s*(\d{1,2}:\d{2}\s*(?:am|pm)?)\s*[-–]\s*(\d{1,2}:\d{2}\s*(?:am|pm)?)\s*$/i);
+  if(two){
+    const start = _parseTimeStr(two[1]);
+    const end   = _parseTimeStr(two[2]);
+    const title = s.slice(0, two.index).replace(/\s*[-–]\s*$/, '').trim();
+    return { title: title||s, startTime: start||rowTime, endTime: end||null };
+  }
+  // Single time at end: "Sleep 22:30"
+  const one = s.match(/\s+(\d{1,2}:\d{2}\s*(?:am|pm)?)\s*$/i);
+  if(one){
+    const start = _parseTimeStr(one[1]);
+    const title = s.slice(0, one.index).trim();
+    return { title: title||s, startTime: start||rowTime, endTime: null };
+  }
+  return { title: s, startTime: rowTime, endTime: null };
+}
+
 // Normalise time strings from Excel/Numbers (handles HH:MM, HH:MM:SS, H:MM AM/PM)
 function _parseTimeStr(raw){
   const s = (raw||'').trim();
@@ -2291,6 +2315,7 @@ function downloadCSVTemplate(){
       rows += `,${t},,,,,,,\n`;
     }
   }
+  rows += `,00:00,,,,,,,\n`;
   const csv = header + dateRow + rows;
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
@@ -2367,18 +2392,19 @@ function importTimetableCSV(e){
       }
       if(timeColIdx<0) throw new Error('No time column found (expected HH:MM values)');
 
-      // 4. Collect event slots per day
-      const slotsByDay = Array.from({length:7}, ()=>[]); // [{name, time}]
+      // 4. Collect event slots per day — extract embedded start/end times from names
+      const slotsByDay = Array.from({length:7}, ()=>[]); // [{name, startTime, endTime}]
       for(let i=headerIdx+1; i<rawLines.length; i++){
         const cols = _parseCSVRow(rawLines[i]);
-        const t = _parseTimeStr(cols[timeColIdx]);
-        if(!t) continue;
+        const rowT = _parseTimeStr(cols[timeColIdx]);
+        if(!rowT) continue;
         for(let di=0; di<7; di++){
           const ci = dayColMap[di];
           if(ci===undefined || ci>=cols.length) continue;
-          const name = cols[ci].trim();
-          if(!name) continue;
-          slotsByDay[di].push({ name, time:t });
+          const raw = cols[ci].trim();
+          if(!raw) continue;
+          const parsed = _parseEventNameAndTime(raw, rowT);
+          slotsByDay[di].push(parsed);
         }
       }
 
@@ -2389,8 +2415,8 @@ function importTimetableCSV(e){
         const dateStr = dayDates[di];
         if(!dateStr) continue;
         for(let si=0; si<slots.length; si++){
-          const { name, time:startTime } = slots[si];
-          const endTime = si+1<slots.length ? slots[si+1].time : addMins(startTime,60);
+          const { title: name, startTime, endTime: embeddedEnd } = slots[si];
+          const endTime = embeddedEnd || (si+1<slots.length ? slots[si+1].startTime : addMins(startTime,60));
           const rule    = S.rules.find(r=>r.name.toLowerCase()===name.toLowerCase());
           const cat     = rule?.cat    || inferCat(name);
           const listId  = rule?.listId || null;
