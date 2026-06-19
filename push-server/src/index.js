@@ -191,6 +191,74 @@ export default {
       }
     }
 
+    // Parse a timetable screenshot via Claude vision → return structured events
+    if (url.pathname === '/parse-image' && req.method === 'POST') {
+      if (!env.ANTHROPIC_API_KEY) return json({ error: 'ANTHROPIC_API_KEY not configured on Worker' }, 500);
+
+      const { image, mediaType } = await req.json();
+      if (!image) return json({ error: 'no image provided' }, 400);
+
+      const prompt = `This is a weekly timetable/schedule image. Extract every event shown in the grid.
+
+The grid has:
+- Left column: time slots (05:00, 05:30, 06:00, etc.)
+- Top row: day names (Monday, Tuesday, etc.)
+- A row with dates in DD/MM/YY format (e.g. 22/06/26)
+- Cells: event names, often with time ranges in the text
+
+For EACH event cell output a JSON object with these exact keys:
+- "day": the day column name ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+- "date": the date for that column in DD/MM/YY format (e.g. "22/06/26")
+- "title": the event name only (strip any trailing time info)
+- "startTime": start in HH:MM 24-hour (e.g. "09:30")
+- "endTime": end in HH:MM 24-hour (e.g. "17:30")
+
+Time parsing rules:
+- "17:30pm" or "18:30pm" → 24-hr already, ignore pm → "17:30", "18:30"
+- "1:00pm" → "13:00", "2:30pm" → "14:30", "12:00pm" → "12:00", "12:00am" → "00:00"
+- "6:30am" → "06:30", "9:30am" → "09:30"
+- If the event text contains a range like "Travel 8:30am - 9:30am" → startTime "08:30", endTime "09:30", title "Travel"
+- If event spans visually across multiple rows, use the top row as startTime and the bottom row end as endTime
+- If no end time can be determined, use startTime + 30 minutes
+
+Return ONLY a valid JSON array with no explanation, markdown, or code fences.`;
+
+      const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type':      'application/json',
+          'x-api-key':         env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model:      'claude-haiku-4-5-20251001',
+          max_tokens: 4096,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: image } },
+              { type: 'text',  text: prompt },
+            ],
+          }],
+        }),
+      });
+
+      if (!aiResp.ok) {
+        const errText = await aiResp.text();
+        return json({ error: `Claude API error ${aiResp.status}: ${errText.slice(0,200)}` }, 500);
+      }
+
+      const aiData = await aiResp.json();
+      const raw = (aiData.content?.[0]?.text || '').trim()
+        .replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/```\s*$/,'');
+
+      let events;
+      try { events = JSON.parse(raw); }
+      catch { return json({ error: 'Claude returned unparseable JSON', raw: raw.slice(0,500) }, 500); }
+
+      return json({ events });
+    }
+
     // Fire an immediate test push to a stored subscription
     if (url.pathname === '/test' && req.method === 'POST') {
       const { subId } = await req.json();

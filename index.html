@@ -918,6 +918,10 @@ table.tt th, table.tt td{
       ↑ CSV
       <input type="file" accept=".csv,.txt" style="display:none" onchange="importTimetableCSV(event)">
     </label>
+    <label class="wbtn" title="Import from screenshot (uses AI)" style="cursor:pointer">
+      <span id="img-upload-label">↑ Image</span>
+      <input type="file" accept="image/*" style="display:none" onchange="importTimetableImage(event)">
+    </label>
     <button class="wbtn" title="Download blank CSV template for this week" onclick="downloadCSVTemplate()">↓ Template</button>
     <button class="wbtn accent" onclick="openAddModal(null,null)">+ Add</button>
   </div>
@@ -2468,6 +2472,100 @@ function importTimetableCSV(e){
 
 // ═══════════════════════════════════════
 // EXPORT / IMPORT
+
+// Resize an image File to a max width and return base64-encoded JPEG string
+function _resizeImageToBase64(file, maxWidth){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxWidth / img.width);
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.88).split(',')[1]);
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+async function importTimetableImage(e){
+  const file = e.target.files[0];
+  if(!file){ e.target.value=''; return; }
+  e.target.value = '';
+
+  const lbl = document.getElementById('img-upload-label');
+  if(lbl) lbl.textContent = '...';
+
+  try {
+    const image     = await _resizeImageToBase64(file, 1800);
+    const mediaType = 'image/jpeg';
+
+    const resp = await fetch('https://systematic-push.archieperkins0.workers.dev/parse-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image, mediaType }),
+    });
+
+    const data = await resp.json();
+    if(!resp.ok || data.error) throw new Error(data.error || `Server error ${resp.status}`);
+
+    const rawEvents = data.events || [];
+    if(!rawEvents.length) throw new Error('No events found in image.');
+
+    // Convert Claude's output → S.oneoffs format
+    const events = [];
+    for(const ev of rawEvents){
+      const dm = (ev.date||'').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+      if(!dm || !ev.title || !ev.startTime) continue;
+      const [,d,mo,yr] = dm;
+      const year    = yr.length===2 ? 2000+parseInt(yr) : parseInt(yr);
+      const dateStr = `${year}-${pad(parseInt(mo))}-${pad(parseInt(d))}`;
+      const title   = ev.title.trim();
+      const startTime = ev.startTime;
+      const endTime   = ev.endTime || addMins(startTime, 30);
+      const rule    = S.rules.find(r=>r.name.toLowerCase()===title.toLowerCase());
+      const cat     = rule?.cat    || inferCat(title);
+      const listId  = rule?.listId || null;
+      const srcList = listId ? S.lists.find(l=>l.id===listId) : null;
+      events.push({
+        id:uid(), title, cat, date:dateStr,
+        startTime, endTime,
+        bell:{...(CAT_BELL[cat]||{at:false,before:0})},
+        checklist: srcList ? srcList.items.map(i=>({...i,id:uid()})) : [],
+        listId: listId||null,
+      });
+    }
+    if(!events.length) throw new Error('Could not extract any valid events from the image.');
+
+    const allDates  = [...new Set(events.map(ev=>ev.date))].sort();
+    const [d0, d1]  = [allDates[0], allDates[allDates.length-1]];
+    const fmtDate   = s => { const [y,mo,d]=s.split('-'); return `${parseInt(d)} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(mo)-1]}`; };
+    const weekLabel = `${fmtDate(d0)} – ${fmtDate(d1)}`;
+
+    showConfirm(`Import ${events.length} events for ${weekLabel}?<br><span style="font-size:12px;color:var(--muted)">Replaces any existing events for those dates.</span>`, ()=>{
+      const dateSet = new Set(allDates);
+      S.oneoffs = S.oneoffs.filter(ev=>!dateSet.has(ev.date));
+      S.oneoffs.push(...events);
+      const importMon   = new Date(d0+'T00:00:00');
+      const todayD      = new Date(); todayD.setHours(0,0,0,0);
+      const thisWeekMon = new Date(todayD);
+      thisWeekMon.setDate(todayD.getDate()-getDow(todayD));
+      weekOffset = Math.round((importMon-thisWeekMon)/(7*24*3600*1000));
+      save(); renderWeek(); scheduleNotifications(); syncPushSchedule();
+    }, false);
+
+  } catch(err){
+    showConfirm(`Could not import image: ${err.message}`, ()=>{}, false);
+  } finally {
+    if(lbl) lbl.textContent = '↑ Image';
+  }
+}
+
 // ═══════════════════════════════════════
 function toggleMoreMenu(){
   const m = document.getElementById('more-menu');
