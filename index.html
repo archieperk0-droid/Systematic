@@ -2311,20 +2311,23 @@ function downloadCSVTemplate(){
   const dFmt  = d=>`${pad(d.getDate())}/${pad(d.getMonth()+1)}/${String(d.getFullYear()).slice(2)}`;
   const DAYS  = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 
-  // Row 1: header  — Start, End, Monday … Sunday
-  const header  = `Start,End,${DAYS.join(',')}\n`;
-  // Row 2: dates   — blank, blank, DD/MM/YY …
+  // Row 1: ,,Monday,Tuesday,...,Sunday
+  const header  = `,,${DAYS.join(',')}\n`;
+  // Row 2: blank
+  const blankRow = `,,,,,,,,\n`;
+  // Row 3: ,,DD/MM/YY,...
   const dateRow = `,,${days.map(dFmt).join(',')}\n`;
-  // Rows 3+: one row per 30-min slot; user fills Start, End, then event name per day
+  // Rows 4+: ,HH:MM, then 7 blank day columns
   let rows = '';
   for(let h=5;h<24;h++){
     for(let half=0;half<2;half++){
-      rows += `${pad(h)}:${half===0?'00':'30'},,,,,,,,\n`;
+      rows += `,${pad(h)}:${half===0?'00':'30'},,,,,,,\n`;
     }
   }
-  rows += `00:00,,,,,,,,\n`;
+  rows += `,00:00,,,,,,,\n`;
+  rows += `,Notes,,,,,,,\n`;
 
-  const csv = header + dateRow + rows;
+  const csv = header + blankRow + dateRow + rows;
   const a   = document.createElement('a');
   a.href    = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   a.download = `systematic-template-${dFmt(days[0]).replace(/\//g,'-')}.csv`;
@@ -2351,72 +2354,82 @@ function importTimetableCSV(e){
     try {
       const rawLines = ev.target.result.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
 
-      // 1. Find header row — must contain day names + "Start" and "End" columns
+      // 1. Find header row — needs ≥5 day names anywhere in the row
       const DAY_WORDS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
       let headerIdx = -1;
-      const dayColMap = {};
-      let startCol = -1, endCol = -1;
+      const dayColMap = {};   // day-of-week 0–6 → col index
 
       for(let i=0; i<rawLines.length; i++){
         const cols = _parseCSVRow(rawLines[i]).map(c=>c.toLowerCase().trim());
-        let hits = 0;
-        const tmp = {};
+        const tmp = {}; let hits = 0;
         DAY_WORDS.forEach((d,di)=>{ const ci=cols.indexOf(d); if(ci>=0){tmp[di]=ci; hits++;} });
-        const sc = cols.indexOf('start');
-        const ec = cols.indexOf('end');
-        if(hits>=5 && sc>=0 && ec>=0){
-          Object.assign(dayColMap, tmp);
-          startCol=sc; endCol=ec; headerIdx=i; break;
-        }
+        if(hits>=5){ Object.assign(dayColMap,tmp); headerIdx=i; break; }
       }
-      if(headerIdx<0) throw new Error(
-        'Header row not found.\nRow 1 must be: Start, End, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday\n\nUse the ↓ Template button to download the correct format.'
-      );
+      if(headerIdx<0) throw new Error('Header row not found. First row must contain day names (Monday–Sunday).');
 
       // 2. Find date row (DD/MM/YY or DD/MM/YYYY) within 5 rows after header
       const colDates = {};
-      for(let i=headerIdx+1; i<Math.min(headerIdx+6, rawLines.length); i++){
+      for(let i=headerIdx+1; i<Math.min(headerIdx+6,rawLines.length); i++){
         const cols = _parseCSVRow(rawLines[i]);
         let found = false;
         for(let ci=0; ci<cols.length; ci++){
           const m = cols[ci].trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-          if(m){
-            const [,d,mo,yr]=m;
-            const year = yr.length===2 ? 2000+parseInt(yr) : parseInt(yr);
-            colDates[ci] = `${year}-${pad(parseInt(mo))}-${pad(parseInt(d))}`;
-            found = true;
-          }
+          if(m){ const[,d,mo,yr]=m; const yr4=yr.length===2?2000+parseInt(yr):parseInt(yr);
+            colDates[ci]=`${yr4}-${pad(parseInt(mo))}-${pad(parseInt(d))}`; found=true; }
         }
         if(found) break;
       }
       const dayDates = {};
-      for(let di=0; di<7; di++){
-        const ci=dayColMap[di];
-        if(ci!==undefined && colDates[ci]) dayDates[di]=colDates[ci];
-      }
-      if(!Object.keys(dayDates).length)
-        throw new Error('Date row not found. Row 2 must have dates in DD/MM/YY format under each day column.');
+      for(let di=0;di<7;di++){ const ci=dayColMap[di]; if(ci!==undefined&&colDates[ci]) dayDates[di]=colDates[ci]; }
+      if(!Object.keys(dayDates).length) throw new Error('Date row not found. Expected dates in DD/MM/YY format under each day column.');
 
-      // 3. Parse event rows — col[startCol]=start time, col[endCol]=end time, day cols=event name
-      const events = [];
+      // 3. Find time column — the column just before the first day column
+      const minDayCol = Math.min(...Object.values(dayColMap));
+
+      // 4. Collect all data rows with their slot time and per-day cell text
+      const dataRows = [];
       for(let i=headerIdx+2; i<rawLines.length; i++){
         const cols = _parseCSVRow(rawLines[i]);
-        const startTime = _parseTimeStr(cols[startCol]);
-        if(!startTime) continue;
-        const endTime = _parseTimeStr(cols[endCol]) || addMins(startTime, 60);
+        let rowTime = null;
+        for(let ci=0; ci<minDayCol; ci++){ const t=_parseTimeStr(cols[ci]); if(t){rowTime=t;break;} }
+        const dayNames = {};
+        for(let di=0;di<7;di++){ const ci=dayColMap[di]; if(ci!==undefined&&ci<cols.length) dayNames[di]=cols[ci].trim(); }
+        dataRows.push({rowTime, dayNames});
+      }
 
-        for(let di=0; di<7; di++){
-          const ci      = dayColMap[di];
-          const dateStr = dayDates[di];
-          if(ci===undefined || !dateStr || ci>=cols.length) continue;
-          const name = cols[ci].trim();
-          if(!name) continue;
-          const rule    = S.rules.find(r=>r.name.toLowerCase()===name.toLowerCase());
-          const cat     = rule?.cat    || inferCat(name);
+      // 5. Build events column by column, extracting times from event name strings
+      const events = [];
+      for(let di=0; di<7; di++){
+        const dateStr = dayDates[di];
+        if(!dateStr) continue;
+        for(let ri=0; ri<dataRows.length; ri++){
+          const {rowTime, dayNames} = dataRows[ri];
+          const raw = dayNames[di];
+          if(!raw) continue;
+
+          const parsed = _parseEventNameAndTime(raw, rowTime);
+          let {title, startTime, endTime} = parsed;
+          if(!startTime) startTime = rowTime;
+          if(!startTime) continue;
+
+          // No embedded end — infer from when the next event in this column starts
+          if(!endTime){
+            for(let rj=ri+1; rj<dataRows.length; rj++){
+              if(dataRows[rj].dayNames[di]){
+                const np = _parseEventNameAndTime(dataRows[rj].dayNames[di], dataRows[rj].rowTime);
+                endTime = np.startTime || dataRows[rj].rowTime;
+                break;
+              }
+            }
+          }
+          if(!endTime) endTime = addMins(startTime, 60);
+
+          const rule    = S.rules.find(r=>r.name.toLowerCase()===title.toLowerCase());
+          const cat     = rule?.cat    || inferCat(title);
           const listId  = rule?.listId || null;
           const srcList = listId ? S.lists.find(l=>l.id===listId) : null;
           events.push({
-            id:uid(), title:name, cat, date:dateStr,
+            id:uid(), title, cat, date:dateStr,
             startTime, endTime,
             bell:{...(CAT_BELL[cat]||{at:false,before:0})},
             checklist: srcList ? srcList.items.map(i=>({...i,id:uid()})) : [],
@@ -2437,11 +2450,11 @@ function importTimetableCSV(e){
         S.oneoffs = S.oneoffs.filter(e=>!dateSet.has(e.date));
         S.oneoffs.push(...events);
 
-        const importMon   = new Date(d0 + 'T00:00:00');
+        const importMon   = new Date(d0+'T00:00:00');
         const todayD      = new Date(); todayD.setHours(0,0,0,0);
         const thisWeekMon = new Date(todayD);
-        thisWeekMon.setDate(todayD.getDate() - getDow(todayD));
-        weekOffset = Math.round((importMon - thisWeekMon) / (7*24*3600*1000));
+        thisWeekMon.setDate(todayD.getDate()-getDow(todayD));
+        weekOffset = Math.round((importMon-thisWeekMon)/(7*24*3600*1000));
 
         save(); renderWeek(); scheduleNotifications(); syncPushSchedule();
       }, false);
