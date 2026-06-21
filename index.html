@@ -2080,7 +2080,7 @@ function saveEvent(){
   const bellAt = document.getElementById('bell-at').checked;
   const before = parseInt(document.getElementById('bell-before').value)||0;
 
-  if(!title) return;
+  if(!title || !start) return;
 
   const location = document.getElementById('ev-location').value.trim();
   const ev = {
@@ -2119,9 +2119,9 @@ function saveEvent(){
   scheduleNotifications();
   closeModal();
 
+  renderToday();
+  renderWeek();
   const active=document.querySelector('.tab.on')?.id?.replace('tab-','');
-  if(active==='today')    renderToday();
-  if(active==='week')     renderWeek();
   if(active==='calendar') renderCalendar();
 }
 
@@ -2131,9 +2131,9 @@ function deleteEvent(){
     S.template = S.template.filter(e=>e.id!==_editId);
     S.oneoffs  = S.oneoffs.filter(e=>e.id!==_editId);
     save(); closeModal();
+    renderToday();
+    renderWeek();
     const active=document.querySelector('.tab.on')?.id?.replace('tab-','');
-    if(active==='today')    renderToday();
-    if(active==='week')     renderWeek();
     if(active==='calendar') renderCalendar();
   });
 }
