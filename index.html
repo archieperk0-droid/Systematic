@@ -1773,7 +1773,7 @@ function renderWeek(){
         td.addEventListener('touchstart', () => { _lpTimer = setTimeout(()=>{ showCopyMenu({preventDefault:()=>{}}); }, 500); }, {passive:true});
         td.addEventListener('touchend',   () => clearTimeout(_lpTimer));
         td.addEventListener('touchmove',  () => clearTimeout(_lpTimer));
-        td.addEventListener('click', ()=>{ if(!_copiedEv) openEditModal(ev.id); });
+        td.addEventListener('click', ()=>{ if(_copiedEv){ _setCopiedEv(null); } else { openEditModal(ev.id); } });
         if(_ttDragEnabled){
           td.draggable = true;
           td.addEventListener('dragstart', e=>{
@@ -1877,6 +1877,7 @@ function _pasteCopiedEv(di, si){
     endTime,
     checklist: (_copiedEv.checklist||[]).map(i=>({...i, id:uid()})),
   });
+  _setCopiedEv(null);
   save(); renderWeek(); scheduleNotifications(); syncPushSchedule();
 }
 
@@ -2241,6 +2242,7 @@ function addChecklistItem(){
 document.getElementById('cl-new').addEventListener('keydown',e=>{
   if(e.key==='Enter'){e.preventDefault();addChecklistItem();}
 });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && _copiedEv) _setCopiedEv(null); });
 
 // Day picker toggles
 document.querySelectorAll('.dp-day').forEach(b=>{
