@@ -914,6 +914,8 @@ table.tt th, table.tt td{
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9,18 15,12 9,6"/></svg>
     </button>
     <button class="wbtn" style="color:var(--red);border-color:var(--red)" onclick="clearWeek()" title="Clear this week's events">Clear</button>
+    <button class="wbtn" onclick="saveWeekAsTemplate()" title="Save this week's events as a reusable template">Save Template</button>
+    <button class="wbtn" onclick="openLoadTemplate()" title="Load a saved template into this week">Load Template</button>
     <label class="wbtn" title="Import CSV timetable" style="cursor:pointer">
       ↑ CSV
       <input type="file" accept=".csv,.txt" style="display:none" onchange="importTimetableCSV(event)">
@@ -1286,9 +1288,10 @@ let S = (() => {
   try { const r=localStorage.getItem(KEY); if(r) return JSON.parse(r); } catch(e){}
   return { v:2, template:[], oneoffs:[], checks:{}, skips:{}, lists:[], rules:[] };
 })();
-if(!S.skips)      S.skips      = {};
-if(!S.rules)      S.rules      = [];
-if(!S.dailyTasks) S.dailyTasks = {};
+if(!S.skips)         S.skips         = {};
+if(!S.rules)         S.rules         = [];
+if(!S.dailyTasks)    S.dailyTasks    = {};
+if(!S.weekTemplates) S.weekTemplates = [];
 
 // Migrate old category names to new set (one-time, harmless on repeat runs)
 const _CAT_MIGRATE = { muaythai:'sport', football:'sport', personal:'project', sleep:'routine' };
@@ -2336,6 +2339,154 @@ function downloadCSVTemplate(){
   a.href    = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   a.download = `systematic-template-${dFmt(days[0]).replace(/\//g,'-')}.csv`;
   a.click();
+}
+
+// ═══════════════════════════════════════
+// WEEK TEMPLATES
+// ═══════════════════════════════════════
+
+function _getViewedWeekDays(){
+  const now = new Date(); now.setHours(0,0,0,0);
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - getDow(now) + weekOffset*7);
+  return Array.from({length:7},(_,i)=>{ const d=new Date(mon); d.setDate(mon.getDate()+i); return d; });
+}
+
+function saveWeekAsTemplate(){
+  const days   = _getViewedWeekDays();
+  const events = [];
+
+  for(let di=0; di<7; di++){
+    const d       = days[di];
+    const dateStr = d.toISOString().slice(0,10);
+    const dow     = di; // 0=Mon…6=Sun
+
+    // Include recurring template events that fire on this day of week
+    S.template.filter(e=>e.days.includes(dow)).forEach(e=>{
+      events.push({ title:e.title, startTime:e.startTime, endTime:e.endTime, cat:e.cat, listId:e.listId||null, dow });
+    });
+
+    // Include one-offs for this date
+    S.oneoffs.filter(e=>e.date===dateStr).forEach(e=>{
+      events.push({ title:e.title, startTime:e.startTime, endTime:e.endTime, cat:e.cat, listId:e.listId||null, dow });
+    });
+  }
+
+  if(!events.length){
+    showConfirm('No events found on this week to save as a template.', ()=>{}, false);
+    return;
+  }
+
+  // Prompt for a name
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:2000;display:flex;align-items:flex-end';
+  overlay.innerHTML = `<div style="background:var(--s1);border-radius:16px 16px 0 0;width:100%;padding:20px 16px 28px;border-top:1px solid var(--bd2)">
+    <div style="font-size:15px;font-weight:600;margin-bottom:14px;color:var(--tx)">Save as Template</div>
+    <input id="_tpl-name" placeholder="e.g. Work Week, Summer Schedule…" style="width:100%;padding:12px;background:var(--s2);border:1px solid var(--bd2);border-radius:10px;color:var(--tx);font-size:14px;font-family:inherit;box-sizing:border-box;margin-bottom:14px">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">${events.length} events will be saved</div>
+    <div style="display:flex;gap:10px">
+      <button id="_tpl-cancel" style="flex:1;padding:13px;background:var(--s3);border:1px solid var(--bd2);border-radius:11px;color:var(--soft);font-size:14px;cursor:pointer;font-family:inherit">Cancel</button>
+      <button id="_tpl-save"   style="flex:1;padding:13px;background:var(--accent);border:none;border-radius:11px;color:#1c1410;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">Save</button>
+    </div></div>`;
+  document.body.appendChild(overlay);
+
+  const inp   = overlay.querySelector('#_tpl-name');
+  const close = () => document.body.removeChild(overlay);
+  setTimeout(()=>inp.focus(), 50);
+
+  overlay.querySelector('#_tpl-cancel').onclick = close;
+  overlay.querySelector('#_tpl-save').onclick = () => {
+    const name = inp.value.trim();
+    if(!name){ inp.style.borderColor='var(--red)'; return; }
+    if(!S.weekTemplates) S.weekTemplates = [];
+    S.weekTemplates.push({ id:uid(), name, events, createdAt:Date.now() });
+    save();
+    close();
+    showConfirm(`Template "<strong>${name}</strong>" saved with ${events.length} events.`, ()=>{}, false);
+  };
+  inp.addEventListener('keydown', e=>{ if(e.key==='Enter') overlay.querySelector('#_tpl-save').click(); });
+  overlay.onclick = e=>{ if(e.target===overlay) close(); };
+}
+
+function openLoadTemplate(){
+  if(!S.weekTemplates || !S.weekTemplates.length){
+    showConfirm('No saved templates yet.<br><span style="font-size:12px;color:var(--muted)">Design a week then hit "Save Template".</span>', ()=>{}, false);
+    return;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:2000;display:flex;align-items:flex-end';
+
+  const listHtml = S.weekTemplates.map((t,i)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--s2);border-radius:10px;margin-bottom:8px">
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:600;color:var(--tx)">${t.name}</div>
+        <div style="font-size:12px;color:var(--muted)">${t.events.length} events</div>
+      </div>
+      <button data-idx="${i}" class="_tpl-load-btn" style="padding:8px 14px;background:var(--accent);border:none;border-radius:9px;color:#1c1410;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Load</button>
+      <button data-idx="${i}" class="_tpl-del-btn"  style="padding:8px 12px;background:var(--s3);border:1px solid var(--bd2);border-radius:9px;color:var(--red);font-size:13px;cursor:pointer;font-family:inherit">✕</button>
+    </div>`).join('');
+
+  overlay.innerHTML = `<div style="background:var(--s1);border-radius:16px 16px 0 0;width:100%;padding:20px 16px 28px;border-top:1px solid var(--bd2);max-height:80vh;overflow-y:auto">
+    <div style="font-size:15px;font-weight:600;margin-bottom:14px;color:var(--tx)">Load Template</div>
+    ${listHtml}
+    <button id="_tpl-close" style="width:100%;margin-top:4px;padding:13px;background:var(--s3);border:1px solid var(--bd2);border-radius:11px;color:var(--soft);font-size:14px;cursor:pointer;font-family:inherit">Cancel</button>
+  </div>`;
+  document.body.appendChild(overlay);
+
+  const close = () => document.body.removeChild(overlay);
+  overlay.querySelector('#_tpl-close').onclick = close;
+  overlay.onclick = e=>{ if(e.target===overlay) close(); };
+
+  overlay.querySelectorAll('._tpl-del-btn').forEach(btn=>{
+    btn.onclick = e => {
+      const idx = parseInt(btn.dataset.idx);
+      const name = S.weekTemplates[idx].name;
+      showConfirm(`Delete template "<strong>${name}</strong>"?`, ()=>{
+        S.weekTemplates.splice(idx,1);
+        save();
+        close();
+        if(S.weekTemplates.length) openLoadTemplate();
+      });
+    };
+  });
+
+  overlay.querySelectorAll('._tpl-load-btn').forEach(btn=>{
+    btn.onclick = () => {
+      const tpl  = S.weekTemplates[parseInt(btn.dataset.idx)];
+      const days = _getViewedWeekDays();
+
+      const events = tpl.events.map(ev=>{
+        const d       = days[ev.dow];
+        const dateStr = d.toISOString().slice(0,10);
+        const rule    = S.rules.find(r=>r.name.toLowerCase()===ev.title.toLowerCase());
+        const cat     = ev.cat || rule?.cat || inferCat(ev.title);
+        const listId  = ev.listId || rule?.listId || null;
+        const srcList = listId ? S.lists.find(l=>l.id===listId) : null;
+        return {
+          id:uid(), title:ev.title, cat, date:dateStr,
+          startTime:ev.startTime, endTime:ev.endTime,
+          bell:{...(CAT_BELL[cat]||{at:false,before:0})},
+          checklist: srcList ? srcList.items.map(i=>({...i,id:uid()})) : [],
+          listId: listId||null,
+        };
+      });
+
+      const allDates  = [...new Set(events.map(e=>e.date))].sort();
+      const [d0,d1]   = [allDates[0], allDates[allDates.length-1]];
+      const fmtDate   = s=>{ const [y,mo,d]=s.split('-'); return `${parseInt(d)} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(mo)-1]}`; };
+
+      close();
+      showConfirm(
+        `Load "<strong>${tpl.name}</strong>" into ${fmtDate(d0)} – ${fmtDate(d1)}?<br><span style="font-size:12px;color:var(--muted)">Adds ${events.length} events — existing events for those dates are kept.</span>`,
+        ()=>{
+          // Add without removing existing — user can clear first if they want a clean slate
+          S.oneoffs.push(...events);
+          save(); renderWeek(); scheduleNotifications(); syncPushSchedule();
+        }, false
+      );
+    };
+  });
 }
 
 function _parseCSVRow(line){
@@ -3453,7 +3604,8 @@ async function cloudPull(){
       if(!S.skips)       S.skips       = {};
       if(!S.lists)       S.lists       = [];
       if(!S.rules)       S.rules       = [];
-      if(!S.dailyTasks)  S.dailyTasks  = {};
+      if(!S.dailyTasks)    S.dailyTasks    = {};
+      if(!S.weekTemplates) S.weekTemplates = [];
       save();
       renderToday(); updateNotifyAllBtn();
       const active = document.querySelector('.tab.on')?.id?.replace('tab-','');
