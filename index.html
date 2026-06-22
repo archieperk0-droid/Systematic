@@ -818,6 +818,8 @@ table.tt th, table.tt td{
 .daily-task-add-btn:hover{background:var(--accent);color:#1c1410;border-color:var(--accent)}
 /* ── Timetable drag-and-drop ──────────────────────────── */
 .tt-ev.dragging{opacity:.35;pointer-events:none}
+.tt-ev.copied-src{outline:2px solid var(--accent);outline-offset:-2px}
+.tt-empty.paste-target{background:color-mix(in srgb,var(--accent) 18%,transparent);cursor:copy}
 .tt-ev[draggable=true]{cursor:grab}
 .tt-ev[draggable=true]:active{cursor:grabbing}
 .tt-empty.drag-over{background:rgba(255,180,0,.12)!important;outline:2px dashed var(--accent);outline-offset:-2px}
@@ -926,6 +928,10 @@ table.tt th, table.tt td{
     </label>
     <button class="wbtn" title="Download blank CSV template for this week" onclick="downloadCSVTemplate()">↓ Template</button>
     <button class="wbtn accent" onclick="openAddModal(null,null)">+ Add</button>
+  </div>
+  <div id="tt-copy-bar" style="display:none;align-items:center;gap:10px;padding:8px 12px;background:var(--accent);color:#1c1410;font-size:13px;font-weight:600">
+    <span id="tt-copy-bar-label" style="flex:1"></span>
+    <button onclick="_setCopiedEv(null)" style="background:rgba(0,0,0,0.15);border:none;border-radius:7px;padding:4px 10px;color:#1c1410;font-size:12px;cursor:pointer;font-family:inherit">✕ Clear</button>
   </div>
   <div class="tt-scroll" id="tt-scroll">
     <table class="tt" id="tt-table">
@@ -1737,11 +1743,37 @@ function renderWeek(){
         const locMark  = ev.location ? `<div class="tt-ev-sub" style="display:flex;align-items:center;gap:2px"><svg width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z'/><circle cx='12' cy='10' r='3'/></svg>${ev.location}</div>` : '';
         const bellMark = ev.bell?.at ? `<div class="tt-ev-bell">${bellSvg(true, 9)}</div>` : '';
         const clCount  = ev.checklist?.length ? `<div class="tt-ev-sub">${ev.checklist.length} items</div>` : '';
+        td.dataset.evid = ev.id;
         td.innerHTML = `<div class="tt-ev-inner">
           <div class="tt-ev-title">${ev.title}</div>
           ${locMark}${clCount}${bellMark}
         </div>`;
-        td.addEventListener('click', ()=>openEditModal(ev.id));
+        if(_copiedEv) td.classList.toggle('copied-src', ev.id === _copiedEv.id);
+
+        // Long-press (mobile) / right-click (desktop) → copy menu
+        let _lpTimer = null;
+        const showCopyMenu = e => {
+          e.preventDefault();
+          const overlay = document.createElement('div');
+          overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:2000;display:flex;align-items:flex-end';
+          overlay.innerHTML = `<div style="background:var(--s1);border-radius:16px 16px 0 0;width:100%;padding:16px 16px 28px;border-top:1px solid var(--bd2)">
+            <div style="font-size:14px;font-weight:600;color:var(--tx);margin-bottom:14px">${ev.title}</div>
+            <button id="_cm-copy" style="width:100%;padding:13px;background:var(--accent);border:none;border-radius:11px;color:#1c1410;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:8px">Copy — tap slot to paste</button>
+            <button id="_cm-edit" style="width:100%;padding:13px;background:var(--s3);border:1px solid var(--bd2);border-radius:11px;color:var(--tx);font-size:14px;cursor:pointer;font-family:inherit;margin-bottom:8px">Edit</button>
+            <button id="_cm-cancel" style="width:100%;padding:13px;background:var(--s3);border:1px solid var(--bd2);border-radius:11px;color:var(--soft);font-size:14px;cursor:pointer;font-family:inherit">Cancel</button>
+          </div>`;
+          document.body.appendChild(overlay);
+          const close = () => document.body.removeChild(overlay);
+          overlay.querySelector('#_cm-copy').onclick   = () => { close(); _setCopiedEv(ev); };
+          overlay.querySelector('#_cm-edit').onclick   = () => { close(); openEditModal(ev.id); };
+          overlay.querySelector('#_cm-cancel').onclick = close;
+          overlay.onclick = e2 => { if(e2.target===overlay) close(); };
+        };
+        td.addEventListener('contextmenu', showCopyMenu);
+        td.addEventListener('touchstart', () => { _lpTimer = setTimeout(()=>{ showCopyMenu({preventDefault:()=>{}}); }, 500); }, {passive:true});
+        td.addEventListener('touchend',   () => clearTimeout(_lpTimer));
+        td.addEventListener('touchmove',  () => clearTimeout(_lpTimer));
+        td.addEventListener('click', ()=>{ if(!_copiedEv) openEditModal(ev.id); });
         if(_ttDragEnabled){
           td.draggable = true;
           td.addEventListener('dragstart', e=>{
@@ -1756,9 +1788,12 @@ function renderWeek(){
           });
         }
       } else {
-        td.className = 'tt-empty' + (di===todayDow?' today-col':'') + (isHour?' hr':'');
+        td.className = 'tt-empty' + (di===todayDow?' today-col':'') + (isHour?' hr':'') + (_copiedEv?' paste-target':'');
         const timeStr = slotToTime(si);
-        td.addEventListener('click', ()=>openAddModal(di, timeStr));
+        td.addEventListener('click', ()=>{
+          if(_copiedEv){ _pasteCopiedEv(di, si); }
+          else { openAddModal(di, timeStr); }
+        });
         if(_ttDragEnabled){
           td.dataset.di = di; td.dataset.si = si;
           td.addEventListener('dragover', e=>{ e.preventDefault(); td.classList.add('drag-over'); });
@@ -1807,6 +1842,43 @@ function drawNowLine(){
 // ═══════════════════════════════════════
 const _ttDragEnabled = window.matchMedia('(pointer: fine)').matches;
 let _dragEvId = null, _dragSrcDi = null, _dragSrcSi = null;
+let _copiedEv = null;  // event object currently in the copy clipboard
+
+function _setCopiedEv(ev){
+  _copiedEv = ev ? JSON.parse(JSON.stringify(ev)) : null;
+  const bar = document.getElementById('tt-copy-bar');
+  if(bar) bar.style.display = _copiedEv ? 'flex' : 'none';
+  if(bar && _copiedEv) bar.querySelector('#tt-copy-bar-label').textContent = `Copied: ${_copiedEv.title} — tap a slot to paste`;
+  // highlight the source card
+  document.querySelectorAll('.tt-ev.copied-src').forEach(el=>el.classList.remove('copied-src'));
+  if(_copiedEv){
+    document.querySelectorAll('.tt-ev').forEach(el=>{
+      if(el.dataset && el.dataset.evid === _copiedEv.id) el.classList.add('copied-src');
+    });
+  }
+}
+
+function _pasteCopiedEv(di, si){
+  if(!_copiedEv) return;
+  const now = new Date(); now.setHours(0,0,0,0);
+  const mon = new Date(now); mon.setDate(now.getDate()-getDow(now)+weekOffset*7);
+  const d   = new Date(mon); d.setDate(mon.getDate()+di);
+  const dateStr   = isoDate(d);
+  const startTime = slotToTime(si);
+  const origMins  = timeMins(_copiedEv.startTime);
+  const endMins   = timeMins(_copiedEv.endTime || addMins(_copiedEv.startTime, 60));
+  const dur       = ((endMins - origMins) + 24*60) % (24*60);
+  const endTime   = addMins(startTime, dur);
+  S.oneoffs.push({
+    ..._copiedEv,
+    id: uid(),
+    date: dateStr,
+    startTime,
+    endTime,
+    checklist: (_copiedEv.checklist||[]).map(i=>({...i, id:uid()})),
+  });
+  save(); renderWeek(); scheduleNotifications(); syncPushSchedule();
+}
 
 function _handleTimetableDrop(evid, srcDi, newDi, newSi){
   const now = new Date();
