@@ -31,6 +31,22 @@
   --nav-h:    58px;
   --top-h:    52px;
 }
+.theme-light {
+  --bg:       #f5f4f0;
+  --s1:       #ffffff;
+  --s2:       #eceae4;
+  --s3:       #e2dfd8;
+  --s4:       #ccc9c0;
+  --bd:       rgba(0,0,0,0.07);
+  --bd2:      rgba(0,0,0,0.13);
+  --tx:       #1c1410;
+  --soft:     rgba(28,20,16,0.55);
+  --muted:    rgba(28,20,16,0.35);
+  --accent:   #d4a017;
+  --accent-d: rgba(212,160,23,0.15);
+  --green:    #5a9a28;
+  --red:      #c84830;
+}
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
 body{
@@ -512,11 +528,15 @@ table.tt th, table.tt td{
 /* ════════════════════════════════════
    CALENDAR TAB
 ════════════════════════════════════ */
-#tab-calendar{padding:16px;max-width:500px;margin:0 auto}
+#tab-calendar{padding:0;display:flex;flex-direction:column;overflow:hidden}
 
-.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-.cal-title{font-size:20px;font-weight:700;letter-spacing:-0.02em}
-.cal-navs{display:flex;gap:4px}
+.cal-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px 10px;
+}
+.cal-title{font-size:22px;font-weight:800;letter-spacing:-0.03em;color:var(--tx)}
+.cal-title span{color:var(--accent)}
+.cal-navs{display:flex;gap:4px;align-items:center}
 .cnb{
   width:30px;height:30px;background:var(--s2);border:1px solid var(--bd2);
   border-radius:7px;cursor:pointer;color:var(--tx);font-size:14px;
@@ -526,52 +546,77 @@ table.tt th, table.tt td{
 
 .cal-dow{
   display:grid;grid-template-columns:repeat(7,1fr);
-  margin-bottom:5px;
+  padding:0 4px;margin-bottom:2px;
 }
 .cal-dow span{
   text-align:center;font-family:'JetBrains Mono',monospace;
-  font-size:9px;text-transform:uppercase;letter-spacing:.06em;
+  font-size:9px;text-transform:uppercase;letter-spacing:.08em;
   color:var(--muted);padding:4px 0;
 }
 
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
-.cal-cell{
-  min-height:42px;display:flex;flex-direction:column;align-items:center;
-  padding:5px 2px 4px;border-radius:8px;cursor:pointer;
-  transition:background .1s;
+.cal-grid{
+  display:grid;grid-template-columns:repeat(7,1fr);
+  gap:1px;background:var(--bd);
+  border-top:1px solid var(--bd);
+  flex:1;
 }
-.cal-cell:hover{background:var(--s3)}
+.cal-cell{
+  min-height:72px;display:flex;flex-direction:column;
+  padding:5px 4px 4px;cursor:pointer;
+  background:var(--bg);
+  transition:background .1s;position:relative;
+}
+.cal-cell:hover{background:var(--s2)}
+.cal-cell.grey{background:var(--s1)}
 .cal-cell.grey .cdn{color:var(--muted)}
-.cal-cell.is-today{background:var(--s3)}
-.cal-cell.is-today .cdn{color:var(--accent);font-weight:700}
-.cal-cell.sel{background:var(--accent);border-radius:8px}
-.cal-cell.sel .cdn{color:#1c1410;font-weight:700}
-.cdn{font-size:14px;font-weight:500;letter-spacing:-0.01em;line-height:1}
-.cdots{display:flex;gap:2px;margin-top:4px;flex-wrap:wrap;justify-content:center}
-.cdot{width:5px;height:5px;border-radius:50%}
+.cdn{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:24px;height:24px;border-radius:50%;
+  font-size:13px;font-weight:500;line-height:1;
+  margin-bottom:3px;align-self:flex-end;flex-shrink:0;
+}
+.cal-cell.is-today .cdn{
+  background:var(--accent);color:#1c1410;font-weight:800;
+}
+.cal-cell.sel:not(.is-today) .cdn{
+  background:var(--s4);color:var(--tx);font-weight:700;
+}
+.cal-cell.sel.is-today .cdn{
+  outline:2px solid var(--s4);outline-offset:1px;
+}
+.cal-pill{
+  font-size:10px;font-weight:500;line-height:1.2;
+  padding:2px 5px;border-radius:4px;margin-bottom:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  width:100%;
+}
+.cal-pill-more{
+  font-size:9px;color:var(--muted);padding:1px 5px;
+}
 
 .day-panel{
-  margin-top:14px;background:var(--s2);border:1px solid var(--bd);
-  border-radius:12px;overflow:hidden;
+  border-top:1px solid var(--bd);background:var(--s1);overflow-y:auto;
+  max-height:38vh;
 }
 .dp-head{
   display:flex;align-items:center;justify-content:space-between;
-  padding:13px 14px 11px;border-bottom:1px solid var(--bd);
+  padding:12px 16px 10px;border-bottom:1px solid var(--bd);
+  position:sticky;top:0;background:var(--s1);z-index:1;
 }
-.dp-title{font-size:15px;font-weight:600;letter-spacing:-0.01em}
+.dp-title{font-size:15px;font-weight:700;letter-spacing:-0.01em}
 .dp-add{
-  padding:5px 11px;background:var(--accent);color:#1c1410;border:none;
-  border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;
+  padding:5px 12px;background:var(--accent);color:#1c1410;border:none;
+  border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;
 }
-.dp-list{padding:10px 12px 12px}
+.dp-list{padding:10px 14px 16px}
 .dp-ev{
   display:flex;align-items:center;gap:10px;
-  padding:8px 10px;background:var(--s3);border-radius:8px;
+  padding:10px 12px;background:var(--s2);border-radius:10px;
   margin-bottom:6px;border-left:3px solid transparent;
 }
 .dp-ev-time{
   font-family:'JetBrains Mono',monospace;font-size:10px;
-  color:var(--soft);min-width:38px;
+  color:var(--soft);min-width:40px;
 }
 .dp-ev-title{flex:1;font-size:13px;font-weight:500}
 .dp-ev-del{
@@ -963,6 +1008,7 @@ table.tt th, table.tt td{
   <div id="day-panel"></div>
 </section>
 
+
 <!-- BOTTOM NAV -->
 <nav class="nav">
   <button class="nb on" id="nav-today" onclick="switchTab('today')">
@@ -1049,6 +1095,31 @@ table.tt th, table.tt td{
 
     <div id="sync-status-row" style="font-size:11px;color:var(--muted);margin-bottom:12px;font-family:'JetBrains Mono',monospace;text-align:center"></div>
     <button id="sync-now-btn" onclick="forceSyncNow()" style="width:100%;padding:12px;background:var(--s3);border:1px solid var(--bd2);border-radius:11px;color:var(--tx);font-size:14px;cursor:pointer;font-family:inherit;margin-bottom:10px">Sync now</button>
+
+    <!-- Theme settings -->
+    <div class="divider" style="margin:18px 0 14px">Auto theme</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div>
+        <div style="font-size:14px;color:var(--tx);font-weight:500">Auto light / dark</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Switches theme based on time of day</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="theme-auto-toggle" onchange="saveThemeSettings()">
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb"></div>
+      </label>
+    </div>
+    <div id="theme-times-row" style="display:flex;gap:12px;margin-bottom:18px">
+      <div class="fld" style="flex:1;margin:0">
+        <label>Light from</label>
+        <input type="time" id="theme-light-from" value="07:00" onchange="saveThemeSettings()" style="width:100%;padding:9px 10px;background:var(--s3);border:1px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:14px;font-family:inherit">
+      </div>
+      <div class="fld" style="flex:1;margin:0">
+        <label>Dark from</label>
+        <input type="time" id="theme-dark-from" value="20:00" onchange="saveThemeSettings()" style="width:100%;padding:9px 10px;background:var(--s3);border:1px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:14px;font-family:inherit">
+      </div>
+    </div>
+
     <button class="btn-cancel" style="width:100%" onclick="closeSyncModal()">Done</button>
   </div>
 </div>
@@ -1947,7 +2018,7 @@ function shiftMonth(n){
 }
 
 function renderCalendar(){
-  document.getElementById('cal-title').textContent = `${MONTHS[calM]} ${calY}`;
+  document.getElementById('cal-title').innerHTML = `${MONTHS[calM]} <span>${calY}</span>`;
 
   const grid = document.getElementById('cal-grid');
   grid.innerHTML = '';
@@ -2005,12 +2076,11 @@ function renderCalendar(){
     const cell=document.createElement('div');
     cell.className='cal-cell'+(grey?' grey':'')+(dateStr===todayStr?' is-today':'')+(dateStr===calSel?' sel':'');
 
-    const evs = evByDate[dateStr]||[];
-    // Show up to 3 unique category dots
-    const cats = [...new Set(evs.map(e=>e.cat))].slice(0,3);
-    const dots = cats.map(c=>`<div class="cdot dot-${c}"></div>`).join('');
+    const evs = (evByDate[dateStr]||[]).sort((a,b)=>timeMins(a.startTime)-timeMins(b.startTime));
+    const pills = evs.slice(0,2).map(ev=>`<div class="cal-pill bg-${ev.cat}">${ev.title}</div>`).join('');
+    const more  = evs.length>2 ? `<div class="cal-pill-more">+${evs.length-2} more</div>` : '';
 
-    cell.innerHTML = `<div class="cdn">${day}</div><div class="cdots">${dots}</div>`;
+    cell.innerHTML = `<div class="cdn">${day}</div>${pills}${more}`;
     const ds=dateStr;
     cell.addEventListener('click',()=>selectDay(ds));
     grid.appendChild(cell);
@@ -3733,11 +3803,43 @@ function _updateSyncStatus(){
 }
 
 // ── Sync modal UI ──
+function closeSyncModal(){
+  document.getElementById('modal-sync').classList.remove('open');
+}
+
+// ═══════════════════════════════════════
+// AUTO THEME (light / dark by time)
+// ═══════════════════════════════════════
+function applyTheme(){
+  const auto      = S.themeAuto || false;
+  const lightFrom = S.themeLightFrom || '07:00';
+  const darkFrom  = S.themeDarkFrom  || '20:00';
+  let light = false;
+  if(auto){
+    const now  = new Date();
+    const mins = now.getHours()*60 + now.getMinutes();
+    const lm   = parseInt(lightFrom.split(':')[0])*60 + parseInt(lightFrom.split(':')[1]);
+    const dm   = parseInt(darkFrom.split(':')[0])*60  + parseInt(darkFrom.split(':')[1]);
+    light = lm <= dm ? (mins >= lm && mins < dm) : (mins >= lm || mins < dm);
+  }
+  document.body.classList.toggle('theme-light', light);
+}
+
+function saveThemeSettings(){
+  S.themeAuto       = document.getElementById('theme-auto-toggle').checked;
+  S.themeLightFrom  = document.getElementById('theme-light-from').value || '07:00';
+  S.themeDarkFrom   = document.getElementById('theme-dark-from').value  || '20:00';
+  save();
+  applyTheme();
+}
+
 function openSyncModal(){
+  document.getElementById('theme-auto-toggle').checked  = S.themeAuto || false;
+  document.getElementById('theme-light-from').value     = S.themeLightFrom || '07:00';
+  document.getElementById('theme-dark-from').value      = S.themeDarkFrom  || '20:00';
   document.getElementById('sync-code-display').textContent = getSyncId();
   _updateSyncStatus();
   document.getElementById('modal-sync').classList.add('open');
-  // Push current state immediately so the cloud is up-to-date before the other device links
   if(WORKER_URL){
     S._ts = Date.now();
     localStorage.setItem(KEY, JSON.stringify(S));
@@ -3747,9 +3849,10 @@ function openSyncModal(){
     }).then(()=>{ _lastCloudPush = Date.now(); _updateSyncStatus(); }).catch(()=>{});
   }
 }
-function closeSyncModal(){
-  document.getElementById('modal-sync').classList.remove('open');
-}
+
+// Check theme every minute
+applyTheme();
+setInterval(applyTheme, 60000);
 document.getElementById('modal-sync').addEventListener('click', e=>{
   if(e.target===e.currentTarget) closeSyncModal();
 });
