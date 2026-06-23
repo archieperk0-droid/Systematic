@@ -1137,6 +1137,14 @@ table.tt th, table.tt td{
       </div>
     </div>
 
+    <!-- One-off / Repeating toggle -->
+    <div class="fld" id="fld-type-toggle">
+      <div style="display:flex;background:var(--s3);border-radius:10px;padding:3px;gap:3px">
+        <button id="toggle-oneoff"   onclick="_setEvType('oneoff')"   style="flex:1;padding:8px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .15s">This date only</button>
+        <button id="toggle-repeat"   onclick="_setEvType('template')" style="flex:1;padding:8px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .15s">Repeating</button>
+      </div>
+    </div>
+
     <!-- DAYS (template mode) -->
     <div class="fld" id="fld-days">
       <label>Repeats on</label>
@@ -1298,6 +1306,12 @@ if(!S.skips)         S.skips         = {};
 if(!S.rules)         S.rules         = [];
 if(!S.dailyTasks)    S.dailyTasks    = {};
 if(!S.weekTemplates) S.weekTemplates = [];
+
+// One-time cleanup: remove all one-offs from 1 July 2026 onwards
+if(!S._cleanedJul26){
+  S.oneoffs = (S.oneoffs||[]).filter(e => !e.date || e.date < '2026-07-01');
+  S._cleanedJul26 = true;
+}
 
 // Migrate old category names to new set (one-time, harmless on repeat runs)
 const _CAT_MIGRATE = { muaythai:'sport', football:'sport', personal:'project', sleep:'routine' };
@@ -2074,8 +2088,21 @@ let _editDate = null;   // for one-off mode
 // Checklist edit state
 let _cl = [];   // [{id,text}]
 
+function _setEvType(type){
+  _editType = type;
+  const isOneoff = type === 'oneoff';
+  document.getElementById('fld-days').style.display = isOneoff ? 'none' : '';
+  document.getElementById('fld-date').style.display = isOneoff ? '' : 'none';
+  const btnOne = document.getElementById('toggle-oneoff');
+  const btnRep = document.getElementById('toggle-repeat');
+  btnOne.style.background = isOneoff ? 'var(--accent)' : 'transparent';
+  btnOne.style.color      = isOneoff ? '#1c1410'       : 'var(--soft)';
+  btnRep.style.background = isOneoff ? 'transparent'   : 'var(--accent)';
+  btnRep.style.color      = isOneoff ? 'var(--soft)'   : '#1c1410';
+}
+
 function openAddModal(dayIdx, time, oneoffMode=false, dateStr=null){
-  _editId=null; _editType=oneoffMode?'oneoff':'template'; _editDate=dateStr;
+  _editId=null; _editDate=dateStr;
   document.getElementById('modal-title').textContent='Add Event';
   document.getElementById('btn-del-ev').style.display='none';
   document.getElementById('ev-title').value='';
@@ -2083,21 +2110,28 @@ function openAddModal(dayIdx, time, oneoffMode=false, dateStr=null){
   document.getElementById('ev-end').value='';
   document.getElementById('ev-cat').value='routine';
   document.getElementById('ev-location').value='';
-  applyCatBellDefaults('routine');  // pre-fill bell from category
+  applyCatBellDefaults('routine');
   _cl=[];
   renderCLEditor();
 
-  if(oneoffMode){
-    document.getElementById('fld-days').style.display='none';
-    document.getElementById('fld-date').style.display='';
-    document.getElementById('ev-date').value=dateStr||today();
+  // Default to one-off when a specific day/date is given (timetable slot click)
+  const defaultOneoff = oneoffMode || (dayIdx !== null && dayIdx !== undefined);
+  _setEvType(defaultOneoff ? 'oneoff' : 'template');
+
+  if(defaultOneoff){
+    // Compute actual date for this day column in the viewed week
+    if(!dateStr && dayIdx !== null && dayIdx !== undefined){
+      const now = new Date(); now.setHours(0,0,0,0);
+      const mon = new Date(now); mon.setDate(now.getDate()-getDow(now)+weekOffset*7);
+      const d   = new Date(mon); d.setDate(mon.getDate()+dayIdx);
+      dateStr = isoDate(d);
+    }
+    document.getElementById('ev-date').value = dateStr || today();
+    _editDate = dateStr;
   } else {
-    document.getElementById('fld-days').style.display='';
-    document.getElementById('fld-date').style.display='none';
-    // Pre-select day if given
     document.querySelectorAll('.dp-day').forEach(b=>{
       const d=parseInt(b.dataset.d);
-      b.classList.toggle('on', dayIdx===null ? d<5 : d===dayIdx);
+      b.classList.toggle('on', d<5);
     });
   }
   updateSavedListSelect();
@@ -2129,13 +2163,10 @@ function openEditModal(evId){
   _cl=(ev.checklist||[]).map(i=>({...i}));
   renderCLEditor();
 
+  _setEvType(_editType);
   if(_editType==='oneoff'){
-    document.getElementById('fld-days').style.display='none';
-    document.getElementById('fld-date').style.display='';
     document.getElementById('ev-date').value=ev.date;
   } else {
-    document.getElementById('fld-days').style.display='';
-    document.getElementById('fld-date').style.display='none';
     document.querySelectorAll('.dp-day').forEach(b=>{
       b.classList.toggle('on',(ev.days||[]).includes(parseInt(b.dataset.d)));
     });
