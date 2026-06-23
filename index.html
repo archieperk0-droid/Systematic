@@ -292,6 +292,18 @@ body{
   color:#1c1410;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;
 }
 .lists-tab-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px}
+.sett-section{padding:18px 16px;border-bottom:1px solid var(--bd)}
+.sett-title{font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:14px}
+.sett-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.sett-row-name{font-size:14px;color:var(--tx);font-weight:500}
+.sett-row-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.sett-row-label{flex:1}
+.sett-time-inp{width:100%;padding:9px 10px;background:var(--s3);border:1px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:14px;font-family:inherit;outline:none}
+.cat-colour-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--bd)}
+.cat-colour-row:last-child{border-bottom:none}
+.cat-colour-swatch{width:28px;height:28px;border-radius:7px;flex-shrink:0;cursor:pointer;border:2px solid transparent}
+.cat-colour-name{flex:1;font-size:13px;color:var(--tx);text-transform:capitalize}
+.cat-colour-inp{width:38px;height:28px;padding:0;border:none;background:none;cursor:pointer;border-radius:5px;overflow:hidden}
 .lists-tab-empty{
   text-align:center;padding:60px 20px;color:var(--muted);font-size:14px;
 }
@@ -929,7 +941,7 @@ table.tt th, table.tt td{
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="12" y1="2" x2="12" y2="4"/></svg>
             Test push (background)
           </button>
-          <button class="more-menu-item" onclick="openSyncModal();closeMoreMenu()">
+          <button class="more-menu-item" onclick="switchTab('lists');closeMoreMenu()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
             Sync settings
           </button>
@@ -1041,29 +1053,79 @@ table.tt th, table.tt td{
   </button>
   <button class="nb" id="nav-lists" onclick="switchTab('lists')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
-      <line x1="3" y1="6" x2="3.01" y2="6" stroke-linecap="round" stroke-width="3"/>
-      <line x1="3" y1="12" x2="3.01" y2="12" stroke-linecap="round" stroke-width="3"/>
-      <line x1="3" y1="18" x2="3.01" y2="18" stroke-linecap="round" stroke-width="3"/>
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07M8.46 8.46a5 5 0 0 0 0 7.07"/>
     </svg>
-    <label>Systems</label>
+    <label>Settings</label>
   </button>
 </nav>
 
-<!-- SYSTEMS TAB -->
+<!-- SETTINGS TAB -->
 <section class="tab" id="tab-lists">
-  <div class="lists-tab-header">
-    <div class="lists-tab-title">
-      <span>Systems</span>
-      <button class="lists-save-btn" id="lists-save-btn" onclick="saveListsExplicit()">Save</button>
+  <div class="lists-tab-body" id="lists-tab-body" style="padding:0">
+
+    <!-- THEME -->
+    <div class="sett-section">
+      <div class="sett-title">Theme</div>
+      <div class="sett-row">
+        <div class="sett-row-label">
+          <div class="sett-row-name">Auto light / dark</div>
+          <div class="sett-row-sub">Switches based on time of day</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="theme-auto-toggle" onchange="saveThemeSettings()">
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </label>
+      </div>
+      <div class="sett-row" style="gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:120px">
+          <div class="sett-row-sub" style="margin-bottom:5px">Light from</div>
+          <input type="time" id="theme-light-from" value="07:00" onchange="saveThemeSettings()" class="sett-time-inp">
+        </div>
+        <div style="flex:1;min-width:120px">
+          <div class="sett-row-sub" style="margin-bottom:5px">Dark from</div>
+          <input type="time" id="theme-dark-from" value="20:00" onchange="saveThemeSettings()" class="sett-time-inp">
+        </div>
+      </div>
     </div>
-    <div class="lists-new-row">
-      <input class="lists-new-inp" id="lists-new-inp" type="text" placeholder="New system name…"
-             onkeydown="if(event.key==='Enter')createListFromTab()">
-      <button class="lists-new-btn" onclick="createListFromTab()">Create</button>
+
+    <!-- SYNC -->
+    <div class="sett-section">
+      <div class="sett-title">Sync</div>
+      <div class="sett-row-sub" style="margin-bottom:10px">Your sync code — share with another device to link data.</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <div id="sync-code-display" style="flex:1;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--accent);background:var(--s3);border:1px solid var(--bd2);border-radius:8px;padding:10px 12px;letter-spacing:.06em;word-break:break-all"></div>
+        <button onclick="copySyncCode()" id="sync-copy-btn" style="padding:10px 14px;background:var(--s3);border:1px solid var(--bd2);border-radius:8px;color:var(--soft);font-size:12px;cursor:pointer;flex-shrink:0;font-family:inherit">Copy</button>
+      </div>
+      <div class="sett-row-sub" style="margin-bottom:12px">Paste a code from another device to link to that account.</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input id="sync-code-inp" type="text" placeholder="Paste code…" style="flex:1;padding:10px 12px;background:var(--s3);border:1px solid var(--bd2);border-radius:8px;color:var(--tx);font-size:13px;font-family:inherit;outline:none">
+        <button onclick="applySyncCode()" style="padding:10px 14px;background:var(--accent);border:none;border-radius:8px;color:#1c1410;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Link</button>
+      </div>
+      <div id="sync-status-row" style="font-size:11px;color:var(--muted);margin-bottom:10px;font-family:'JetBrains Mono',monospace"></div>
+      <button onclick="forceSyncNow()" style="width:100%;padding:12px;background:var(--s3);border:1px solid var(--bd2);border-radius:11px;color:var(--tx);font-size:14px;cursor:pointer;font-family:inherit">Sync now</button>
     </div>
+
+    <!-- CATEGORY COLOURS -->
+    <div class="sett-section">
+      <div class="sett-title">Category colours</div>
+      <div id="cat-colour-list"></div>
+    </div>
+
+    <!-- SYSTEMS -->
+    <div class="sett-section" style="padding-bottom:24px">
+      <div class="sett-title" style="margin-bottom:10px">Systems</div>
+      <div class="lists-new-row" style="margin-bottom:14px">
+        <input class="lists-new-inp" id="lists-new-inp" type="text" placeholder="New system name…"
+               onkeydown="if(event.key==='Enter')createListFromTab()">
+        <button class="lists-new-btn" onclick="createListFromTab()">Create</button>
+      </div>
+      <div id="lists-tab-inner"></div>
+    </div>
+
   </div>
-  <div class="lists-tab-body" id="lists-tab-body"></div>
 </section>
 
 <!-- SYNC MODAL -->
@@ -1521,7 +1583,7 @@ function switchTab(name){
   if(name==='today')    { viewDayOffset=0; renderToday(); updateNotifyAllBtn(); }
   if(name==='week')     { weekOffset=0; renderWeek(); }
   if(name==='calendar') renderCalendar();
-  if(name==='lists')    renderListsTab();
+  if(name==='lists')    renderSettingsTab();
 }
 
 function refreshCurrentTab(){
@@ -1532,7 +1594,7 @@ function refreshCurrentTab(){
   if(active==='today')    { renderToday(); updateNotifyAllBtn(); }
   if(active==='week')     renderWeek();
   if(active==='calendar') renderCalendar();
-  if(active==='lists')    renderListsTab();
+  if(active==='lists')    renderSettingsTab();
 }
 
 // ═══════════════════════════════════════
@@ -3224,7 +3286,7 @@ function _reRenderLists(){
   renderListsTab();
   updateSavedListSelect();
   initListDragSort('mlc', document.getElementById('lists-body'));
-  initListDragSort('mlt', document.getElementById('lists-tab-body'));
+  initListDragSort('mlt', document.getElementById('lists-tab-inner'));
 }
 
 function initListDragSort(prefix, container){
@@ -3323,12 +3385,71 @@ function renderListsModal(){
 }
 
 function renderListsTab(){
-  const body = document.getElementById('lists-tab-body');
-  if(!body) return;
-  body.innerHTML = S.lists.length
+  const inner = document.getElementById('lists-tab-inner');
+  if(!inner) return;
+  inner.innerHTML = S.lists.length
     ? S.lists.map(l=>_listsCardHTML(l,'mlt')).join('')
-    : `<div class="lists-tab-empty">No systems yet.<br>Type a name above and tap Create.</div>`;
-  initListDragSort('mlt', body);
+    : `<div class="lists-tab-empty" style="padding:30px 0 0;text-align:center;color:var(--muted);font-size:13px">No systems yet.<br>Type a name above and tap Create.</div>`;
+  initListDragSort('mlt', inner);
+}
+
+function renderCatColours(){
+  const CATS = ['routine','work','gym','sport','social','travel','project','holiday','other'];
+  const defaults = {
+    routine:'#c5c84a', work:'#8aab3a', gym:'#3282dc', sport:'#e06848',
+    social:'#70b8a0', travel:'#8094b8', project:'#9b7fd4', holiday:'#ffb432', other:'#888888'
+  };
+  if(!S.catColours) S.catColours = {};
+  const el = document.getElementById('cat-colour-list');
+  if(!el) return;
+  el.innerHTML = CATS.map(cat => {
+    const colour = S.catColours[cat] || defaults[cat];
+    return `<div class="cat-colour-row">
+      <div class="cat-colour-swatch bg-${cat}" style="background:${colour}22;color:${colour}"></div>
+      <div class="cat-colour-name">${cat}</div>
+      <input type="color" class="cat-colour-inp" value="${colour}" data-cat="${cat}"
+             onchange="updateCatColour('${cat}', this.value)">
+    </div>`;
+  }).join('');
+}
+
+function updateCatColour(cat, colour){
+  if(!S.catColours) S.catColours = {};
+  S.catColours[cat] = colour;
+  save();
+  applyCatColours();
+  renderCatColours();
+}
+
+function applyCatColours(){
+  if(!S.catColours) return;
+  let style = document.getElementById('cat-colour-style');
+  if(!style){ style = document.createElement('style'); style.id='cat-colour-style'; document.head.appendChild(style); }
+  const rules = Object.entries(S.catColours).map(([cat,col])=>{
+    const hex = col.replace('#','');
+    const r=parseInt(hex.slice(0,2),16), g=parseInt(hex.slice(2,4),16), b=parseInt(hex.slice(4,6),16);
+    return `.bg-${cat}{background:rgba(${r},${g},${b},.22);color:${col}}.dot-${cat}{background:${col}}`;
+  }).join('');
+  style.textContent = rules;
+}
+
+function renderSettingsTab(){
+  // Populate sync code
+  const disp = document.getElementById('sync-code-display');
+  if(disp) disp.textContent = getSyncId();
+  _updateSyncStatus();
+  // Populate theme toggles
+  const tog = document.getElementById('theme-auto-toggle');
+  if(tog) tog.checked = S.themeAuto || false;
+  const lf = document.getElementById('theme-light-from');
+  if(lf) lf.value = S.themeLightFrom || '07:00';
+  const df = document.getElementById('theme-dark-from');
+  if(df) df.value = S.themeDarkFrom || '20:00';
+  // Category colours
+  applyCatColours();
+  renderCatColours();
+  // Systems list
+  renderListsTab();
 }
 
 function toggleMLCard(cardId){
@@ -3786,7 +3907,7 @@ async function cloudPull(){
       const active = document.querySelector('.tab.on')?.id?.replace('tab-','');
       if(active==='week')     renderWeek();
       if(active==='calendar') renderCalendar();
-      if(active==='lists')    renderListsTab();
+      if(active==='lists')    renderSettingsTab();
     }
     _lastCloudPush = Date.now();
     _updateSyncStatus();
@@ -3853,6 +3974,9 @@ function openSyncModal(){
 // Check theme every minute
 applyTheme();
 setInterval(applyTheme, 60000);
+
+// Apply any saved category colours on startup
+applyCatColours();
 document.getElementById('modal-sync').addEventListener('click', e=>{
   if(e.target===e.currentTarget) closeSyncModal();
 });

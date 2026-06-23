@@ -1,4 +1,4 @@
-const CACHE = 'systematic-v27';
+const CACHE = 'systematic-v28';
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./'])));
