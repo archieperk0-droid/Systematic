@@ -540,7 +540,8 @@ table.tt th, table.tt td{
 /* ════════════════════════════════════
    CALENDAR TAB
 ════════════════════════════════════ */
-#tab-calendar{padding:0;display:flex;flex-direction:column;overflow:hidden}
+#tab-calendar{padding:0;display:none;flex-direction:column;height:calc(100dvh - var(--top-h) - var(--nav-h));overflow:hidden}
+#tab-calendar.on{display:flex}
 
 .cal-header{
   display:flex;align-items:center;justify-content:space-between;
@@ -1110,8 +1111,13 @@ table.tt th, table.tt td{
 
     <!-- CATEGORY COLOURS -->
     <div class="sett-section">
-      <div class="sett-title">Category colours</div>
+      <div class="sett-title">Categories</div>
       <div id="cat-colour-list"></div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <input id="cat-new-inp" type="text" placeholder="New category name…" class="lists-new-inp" style="flex:1">
+        <input id="cat-new-colour" type="color" value="#a0c4ff" class="cat-colour-inp" style="width:42px;height:38px;border-radius:8px">
+        <button onclick="createCategory()" class="lists-new-btn">Add</button>
+      </div>
     </div>
 
     <!-- SYSTEMS -->
@@ -1129,62 +1135,7 @@ table.tt th, table.tt td{
 </section>
 
 <!-- SYNC MODAL -->
-<div class="overlay" id="modal-sync">
-  <div class="sheet">
-    <div class="sheet-handle"></div>
-    <div class="sheet-title">Cloud Sync</div>
-
-    <!-- Step 1: your code -->
-    <div style="background:var(--s2);border:1px solid var(--bd2);border-radius:12px;padding:14px;margin-bottom:14px">
-      <div style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:.06em;margin-bottom:8px">STEP 1 — YOUR SYNC CODE</div>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-        <div id="sync-code-display" style="flex:1;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--accent);background:var(--s3);border:1px solid var(--bd2);border-radius:8px;padding:10px 12px;letter-spacing:.06em;word-break:break-all"></div>
-        <button onclick="copySyncCode()" id="sync-copy-btn" style="padding:10px 14px;background:var(--s3);border:1px solid var(--bd2);border-radius:8px;color:var(--soft);font-size:12px;cursor:pointer;flex-shrink:0;font-family:inherit">Copy</button>
-      </div>
-      <div style="font-size:11px;color:var(--muted);line-height:1.5">Copy this code, then open <strong style="color:var(--soft)">Sync settings</strong> on your other device and paste it below.</div>
-    </div>
-
-    <!-- Step 2: link another device -->
-    <div style="background:var(--s2);border:1px solid var(--bd2);border-radius:12px;padding:14px;margin-bottom:14px">
-      <div style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:.06em;margin-bottom:8px">STEP 2 — LINK THIS DEVICE</div>
-      <div style="display:flex;gap:8px;margin-bottom:8px">
-        <input id="sync-code-inp" type="text" placeholder="Paste code from other device…"
-          style="flex:1;padding:10px 12px;background:var(--s3);border:1px solid var(--bd2);border-radius:8px;color:var(--tx);font-size:13px;font-family:'JetBrains Mono',monospace;outline:none;min-width:0">
-        <button onclick="applySyncCode()" style="padding:10px 14px;background:var(--accent);border:none;border-radius:8px;color:#1c1410;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;font-family:inherit">Link</button>
-      </div>
-      <div style="font-size:11px;color:var(--muted);line-height:1.5">Only do this on your <strong style="color:var(--soft)">other</strong> device. This replaces its data with the linked account.</div>
-    </div>
-
-    <div id="sync-status-row" style="font-size:11px;color:var(--muted);margin-bottom:12px;font-family:'JetBrains Mono',monospace;text-align:center"></div>
-    <button id="sync-now-btn" onclick="forceSyncNow()" style="width:100%;padding:12px;background:var(--s3);border:1px solid var(--bd2);border-radius:11px;color:var(--tx);font-size:14px;cursor:pointer;font-family:inherit;margin-bottom:10px">Sync now</button>
-
-    <!-- Theme settings -->
-    <div class="divider" style="margin:18px 0 14px">Auto theme</div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <div>
-        <div style="font-size:14px;color:var(--tx);font-weight:500">Auto light / dark</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">Switches theme based on time of day</div>
-      </div>
-      <label class="toggle">
-        <input type="checkbox" id="theme-auto-toggle" onchange="saveThemeSettings()">
-        <div class="toggle-track"></div>
-        <div class="toggle-thumb"></div>
-      </label>
-    </div>
-    <div id="theme-times-row" style="display:flex;gap:12px;margin-bottom:18px">
-      <div class="fld" style="flex:1;margin:0">
-        <label>Light from</label>
-        <input type="time" id="theme-light-from" value="07:00" onchange="saveThemeSettings()" style="width:100%;padding:9px 10px;background:var(--s3);border:1px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:14px;font-family:inherit">
-      </div>
-      <div class="fld" style="flex:1;margin:0">
-        <label>Dark from</label>
-        <input type="time" id="theme-dark-from" value="20:00" onchange="saveThemeSettings()" style="width:100%;padding:9px 10px;background:var(--s3);border:1px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:14px;font-family:inherit">
-      </div>
-    </div>
-
-    <button class="btn-cancel" style="width:100%" onclick="closeSyncModal()">Done</button>
-  </div>
-</div>
+<div class="overlay" id="modal-sync" style="display:none"></div>
 
 <!-- AUTO-ASSIGN RULES MODAL -->
 <div class="overlay" id="modal-rules">
@@ -1247,17 +1198,7 @@ table.tt th, table.tt td{
     </div>
     <div class="fld">
       <label>Category</label>
-      <select id="ev-cat">
-        <option value="routine">Routine</option>
-        <option value="gym">Gym</option>
-        <option value="sport">Sport</option>
-        <option value="social">Social</option>
-        <option value="travel">Travel</option>
-        <option value="project">Project</option>
-        <option value="work">Work</option>
-        <option value="holiday">Holiday</option>
-        <option value="other">Other</option>
-      </select>
+      <select id="ev-cat"></select>
     </div>
     <div class="fld">
       <label>Location</label>
@@ -2138,7 +2079,7 @@ function renderCalendar(){
     const cell=document.createElement('div');
     cell.className='cal-cell'+(grey?' grey':'')+(dateStr===todayStr?' is-today':'')+(dateStr===calSel?' sel':'');
 
-    const evs = (evByDate[dateStr]||[]).filter(e=>e.cat!=='routine').sort((a,b)=>timeMins(a.startTime)-timeMins(b.startTime));
+    const evs = (evByDate[dateStr]||[]).filter(e=>_catShowOnCal(e.cat)).sort((a,b)=>timeMins(a.startTime)-timeMins(b.startTime));
     const pills = evs.slice(0,2).map(ev=>`<div class="cal-pill bg-${ev.cat}">${ev.title}</div>`).join('');
     const more  = evs.length>2 ? `<div class="cal-pill-more">+${evs.length-2} more</div>` : '';
 
@@ -2220,6 +2161,14 @@ let _editDate = null;   // for one-off mode
 // Checklist edit state
 let _cl = [];   // [{id,text}]
 
+function _populateCatSelect(selectedCat){
+  const sel = document.getElementById('ev-cat');
+  if(!sel) return;
+  sel.innerHTML = _allCats().map(cat=>
+    `<option value="${cat}" ${cat===(selectedCat||'routine')?'selected':''}>${cat.charAt(0).toUpperCase()+cat.slice(1)}</option>`
+  ).join('');
+}
+
 function _setEvType(type){
   _editType = type;
   const isOneoff = type === 'oneoff';
@@ -2240,7 +2189,7 @@ function openAddModal(dayIdx, time, oneoffMode=false, dateStr=null){
   document.getElementById('ev-title').value='';
   document.getElementById('ev-start').value=time||'';
   document.getElementById('ev-end').value='';
-  document.getElementById('ev-cat').value='routine';
+  _populateCatSelect('routine');
   document.getElementById('ev-location').value='';
   applyCatBellDefaults('routine');
   _cl=[];
@@ -2283,7 +2232,7 @@ function openEditModal(evId){
   document.getElementById('ev-title').value=ev.title;
   document.getElementById('ev-start').value=ev.startTime||'';
   document.getElementById('ev-end').value=ev.endTime||'';
-  document.getElementById('ev-cat').value=ev.cat||'routine';
+  _populateCatSelect(ev.cat||'routine');
   document.getElementById('ev-location').value=ev.location||'';
   document.getElementById('bell-at').checked=!!(ev.bell?.at);
   document.getElementById('bell-before').value=ev.bell?.before||0;
@@ -3393,62 +3342,119 @@ function renderListsTab(){
   initListDragSort('mlt', inner);
 }
 
+const CAT_DEFAULTS = {
+  routine:'#c5c84a', work:'#8aab3a', gym:'#3282dc', sport:'#e06848',
+  social:'#70b8a0', travel:'#8094b8', project:'#9b7fd4', holiday:'#ffb432', other:'#888888'
+};
+// showOnCal defaults: routine off, everything else on
+const CAT_SHOW_DEFAULTS = { routine:false };
+
+function _catSettings(){
+  if(!S.catSettings) S.catSettings = {};
+  return S.catSettings;
+}
+function _catColour(cat){
+  return _catSettings()[cat]?.colour || CAT_DEFAULTS[cat] || '#888888';
+}
+function _catShowOnCal(cat){
+  const cs = _catSettings()[cat];
+  if(cs && cs.showOnCal !== undefined) return cs.showOnCal;
+  return CAT_SHOW_DEFAULTS[cat] !== undefined ? CAT_SHOW_DEFAULTS[cat] : true;
+}
+function _allCats(){
+  const base = Object.keys(CAT_DEFAULTS);
+  const custom = Object.keys(_catSettings()).filter(c=>!base.includes(c));
+  return [...base, ...custom];
+}
+
 function renderCatColours(){
-  const CATS = ['routine','work','gym','sport','social','travel','project','holiday','other'];
-  const defaults = {
-    routine:'#c5c84a', work:'#8aab3a', gym:'#3282dc', sport:'#e06848',
-    social:'#70b8a0', travel:'#8094b8', project:'#9b7fd4', holiday:'#ffb432', other:'#888888'
-  };
-  if(!S.catColours) S.catColours = {};
   const el = document.getElementById('cat-colour-list');
   if(!el) return;
-  el.innerHTML = CATS.map(cat => {
-    const colour = S.catColours[cat] || defaults[cat];
+  el.innerHTML = _allCats().map(cat => {
+    const colour  = _catColour(cat);
+    const showCal = _catShowOnCal(cat);
+    const isCustom = !CAT_DEFAULTS[cat];
     return `<div class="cat-colour-row">
-      <div class="cat-colour-swatch bg-${cat}" style="background:${colour}22;color:${colour}"></div>
-      <div class="cat-colour-name">${cat}</div>
-      <input type="color" class="cat-colour-inp" value="${colour}" data-cat="${cat}"
-             onchange="updateCatColour('${cat}', this.value)">
+      <input type="color" class="cat-colour-inp" value="${colour}" title="Change colour"
+             onchange="updateCatColour('${cat}',this.value)" style="width:32px;height:32px;border-radius:7px;flex-shrink:0">
+      <div class="cat-colour-name" style="display:flex;align-items:center;gap:6px">
+        <span class="cdot" style="background:${colour};width:8px;height:8px;flex-shrink:0"></span>
+        ${cat}${isCustom?` <button onclick="deleteCategory('${cat}')" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;padding:0 4px">✕</button>`:''}
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <span style="font-size:10px;color:var(--muted)">Calendar</span>
+        <label class="toggle" style="transform:scale(.8);transform-origin:right center">
+          <input type="checkbox" ${showCal?'checked':''} onchange="toggleCatCalendar('${cat}',this.checked)">
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </label>
+      </div>
     </div>`;
   }).join('');
 }
 
 function updateCatColour(cat, colour){
-  if(!S.catColours) S.catColours = {};
-  S.catColours[cat] = colour;
+  const cs = _catSettings();
+  if(!cs[cat]) cs[cat] = {};
+  cs[cat].colour = colour;
+  S.catSettings = cs;
+  save(); applyCatColours(); renderCatColours();
+}
+
+function toggleCatCalendar(cat, show){
+  const cs = _catSettings();
+  if(!cs[cat]) cs[cat] = {};
+  cs[cat].showOnCal = show;
+  S.catSettings = cs;
   save();
-  applyCatColours();
-  renderCatColours();
+}
+
+function createCategory(){
+  const inp = document.getElementById('cat-new-inp');
+  const colInp = document.getElementById('cat-new-colour');
+  const name = inp.value.trim().toLowerCase().replace(/\s+/g,'-');
+  if(!name) return;
+  const cs = _catSettings();
+  if(!cs[name]) cs[name] = {};
+  cs[name].colour   = colInp.value;
+  cs[name].showOnCal = true;
+  S.catSettings = cs;
+  inp.value = ''; save(); applyCatColours(); renderCatColours();
+}
+
+function deleteCategory(cat){
+  showConfirm(`Delete category "<strong>${cat}</strong>"? Events tagged with it keep the tag.`, ()=>{
+    const cs = _catSettings();
+    delete cs[cat];
+    S.catSettings = cs;
+    save(); applyCatColours(); renderCatColours();
+  });
 }
 
 function applyCatColours(){
-  if(!S.catColours) return;
   let style = document.getElementById('cat-colour-style');
-  if(!style){ style = document.createElement('style'); style.id='cat-colour-style'; document.head.appendChild(style); }
-  const rules = Object.entries(S.catColours).map(([cat,col])=>{
+  if(!style){ style=document.createElement('style'); style.id='cat-colour-style'; document.head.appendChild(style); }
+  const rules = _allCats().map(cat=>{
+    const col = _catColour(cat);
     const hex = col.replace('#','');
     const r=parseInt(hex.slice(0,2),16), g=parseInt(hex.slice(2,4),16), b=parseInt(hex.slice(4,6),16);
-    return `.bg-${cat}{background:rgba(${r},${g},${b},.22);color:${col}}.dot-${cat}{background:${col}}`;
+    return `.bg-${cat}{background:rgba(${r},${g},${b},.22)!important;color:${col}!important}.dot-${cat}{background:${col}!important}.cal-pill.bg-${cat}{background:rgba(${r},${g},${b},.28)!important;color:${col}!important}`;
   }).join('');
   style.textContent = rules;
 }
 
 function renderSettingsTab(){
-  // Populate sync code
   const disp = document.getElementById('sync-code-display');
   if(disp) disp.textContent = getSyncId();
   _updateSyncStatus();
-  // Populate theme toggles
   const tog = document.getElementById('theme-auto-toggle');
   if(tog) tog.checked = S.themeAuto || false;
   const lf = document.getElementById('theme-light-from');
   if(lf) lf.value = S.themeLightFrom || '07:00';
   const df = document.getElementById('theme-dark-from');
   if(df) df.value = S.themeDarkFrom || '20:00';
-  // Category colours
   applyCatColours();
   renderCatColours();
-  // Systems list
   renderListsTab();
 }
 
@@ -3955,20 +3961,8 @@ function saveThemeSettings(){
 }
 
 function openSyncModal(){
-  document.getElementById('theme-auto-toggle').checked  = S.themeAuto || false;
-  document.getElementById('theme-light-from').value     = S.themeLightFrom || '07:00';
-  document.getElementById('theme-dark-from').value      = S.themeDarkFrom  || '20:00';
-  document.getElementById('sync-code-display').textContent = getSyncId();
-  _updateSyncStatus();
-  document.getElementById('modal-sync').classList.add('open');
-  if(WORKER_URL){
-    S._ts = Date.now();
-    localStorage.setItem(KEY, JSON.stringify(S));
-    const body = JSON.stringify(S);
-    fetch(`${WORKER_URL}/sync?id=${encodeURIComponent(getSyncId())}`, {
-      method:'POST', headers:{'Content-Type':'application/json'}, body,
-    }).then(()=>{ _lastCloudPush = Date.now(); _updateSyncStatus(); }).catch(()=>{});
-  }
+  // Sync settings now live on the Settings tab — just navigate there
+  switchTab('lists');
 }
 
 // Check theme every minute
@@ -3977,9 +3971,6 @@ setInterval(applyTheme, 60000);
 
 // Apply any saved category colours on startup
 applyCatColours();
-document.getElementById('modal-sync').addEventListener('click', e=>{
-  if(e.target===e.currentTarget) closeSyncModal();
-});
 
 function copySyncCode(){
   navigator.clipboard?.writeText(getSyncId()).catch(()=>{});
