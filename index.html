@@ -2076,7 +2076,7 @@ function renderCalendar(){
     const cell=document.createElement('div');
     cell.className='cal-cell'+(grey?' grey':'')+(dateStr===todayStr?' is-today':'')+(dateStr===calSel?' sel':'');
 
-    const evs = (evByDate[dateStr]||[]).sort((a,b)=>timeMins(a.startTime)-timeMins(b.startTime));
+    const evs = (evByDate[dateStr]||[]).filter(e=>e.cat!=='routine').sort((a,b)=>timeMins(a.startTime)-timeMins(b.startTime));
     const pills = evs.slice(0,2).map(ev=>`<div class="cal-pill bg-${ev.cat}">${ev.title}</div>`).join('');
     const more  = evs.length>2 ? `<div class="cal-pill-more">+${evs.length-2} more</div>` : '';
 
